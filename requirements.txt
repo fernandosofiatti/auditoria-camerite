@@ -1,0 +1,8 @@
+streamlit
+pandas
+openpyxl
+pillow
+reportlab
+psycopg2-binary
+supabase
+requests

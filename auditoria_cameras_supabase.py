@@ -1825,6 +1825,306 @@ def exibir_pdf_reprovadas_auditoria(df_salvos, id_cliente_selecionado=None):
             )
 
 
+
+
+# ── Auditoria LPR ────────────────────────────────────────────────────────────
+def preparar_df_auditoria_lpr(cameras_df, df_salvos, id_cliente_selecionado=None):
+    """Monta a visão de auditoria somente para câmeras que possuem LPR no nome."""
+    if cameras_df is None or cameras_df.empty:
+        return pd.DataFrame()
+
+    df_lpr = cameras_df.copy()
+
+    for col in ["ID_Whitelabel", "Franqueado", "ID_da_Camera", "Nome_da_Camera", "Status_da_Camera", "Plano_Contratado", "cidade", "uf"]:
+        if col not in df_lpr.columns:
+            df_lpr[col] = ""
+
+    if id_cliente_selecionado:
+        id_filtro = str(id_cliente_selecionado).strip()
+        df_lpr = df_lpr[df_lpr["ID_Whitelabel"].astype(str).str.strip() == id_filtro].copy()
+
+    df_lpr = df_lpr[df_lpr["Nome_da_Camera"].fillna("").astype(str).str.contains("LPR", case=False, na=False)].copy()
+
+    if df_lpr.empty:
+        return pd.DataFrame()
+
+    df_lpr = df_lpr.rename(columns={"cidade": "Cidade", "uf": "UF"})
+
+    colunas_base = [
+        "ID_Whitelabel", "Franqueado", "Cidade", "UF", "ID_da_Camera", "Nome_da_Camera",
+        "Status_da_Camera", "Plano_Contratado"
+    ]
+    df_lpr = garantir_colunas_dataframe(df_lpr, colunas_base)
+    df_lpr = df_lpr[colunas_base].drop_duplicates("ID_da_Camera")
+
+    colunas_auditoria = [
+        "ID_da_Camera", "Data_Auditoria", "Marca d'Água Travada", "Câmera está com um bom foco",
+        "Câmera está bem posicionada", "LPR lendo de forma efetiva", "Resultado_Geral",
+        "Observacoes", "Caminho_Evidencia", "Caminho_Thumbnail"
+    ]
+
+    if df_salvos is not None and not df_salvos.empty:
+        df_aud = garantir_colunas_dataframe(df_salvos.copy(), colunas_auditoria)
+        df_aud = df_aud[colunas_auditoria].drop_duplicates("ID_da_Camera")
+        df_lpr = df_lpr.merge(df_aud, on="ID_da_Camera", how="left")
+    else:
+        for col in colunas_auditoria:
+            if col != "ID_da_Camera":
+                df_lpr[col] = ""
+
+    df_lpr["Resultado_Geral"] = df_lpr["Resultado_Geral"].fillna("").replace("", "PENDENTE")
+    df_lpr["Data_Auditoria"] = df_lpr["Data_Auditoria"].fillna("")
+    df_lpr["Observacoes"] = df_lpr["Observacoes"].fillna("")
+
+    ordem_status = {"REPROVADA": 0, "PENDENTE": 1, "APROVADA": 2}
+    df_lpr["_ordem_status"] = df_lpr["Resultado_Geral"].map(ordem_status).fillna(9)
+    df_lpr = df_lpr.sort_values(["Franqueado", "_ordem_status", "Nome_da_Camera", "ID_da_Camera"]).drop(columns=["_ordem_status"])
+
+    return df_lpr.reset_index(drop=True)
+
+
+def gerar_excel_auditoria_lpr(df_lpr):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Auditoria LPR"
+
+    AZUL_HEADER = "1F4E79"
+    VERDE = "C6EFCE"
+    VERMELHO = "FFC7CE"
+    AMARELO = "FFF2CC"
+
+    colunas = [
+        "ID_Whitelabel", "Franqueado", "Cidade", "UF", "ID_da_Camera", "Nome_da_Camera",
+        "Status_da_Camera", "Plano_Contratado", "Data_Auditoria", "Marca d'Água Travada",
+        "Câmera está com um bom foco", "Câmera está bem posicionada", "LPR lendo de forma efetiva",
+        "Resultado_Geral", "Observacoes"
+    ]
+
+    df = garantir_colunas_dataframe(df_lpr.copy(), colunas)
+
+    for col_idx, nome_coluna in enumerate(colunas, 1):
+        cel = ws.cell(row=1, column=col_idx, value=nome_coluna)
+        cel.font = Font(bold=True, color="FFFFFF")
+        cel.fill = PatternFill("solid", fgColor=AZUL_HEADER)
+        cel.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for row_idx, row in df.reset_index(drop=True).iterrows():
+        linha = row_idx + 2
+        for col_idx, nome_coluna in enumerate(colunas, 1):
+            cel = ws.cell(row=linha, column=col_idx, value=row.get(nome_coluna, ""))
+            cel.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        col_resultado = colunas.index("Resultado_Geral") + 1
+        cel_resultado = ws.cell(row=linha, column=col_resultado)
+        resultado = str(cel_resultado.value or "").upper()
+        if resultado == "APROVADA":
+            cel_resultado.fill = PatternFill("solid", fgColor=VERDE)
+        elif resultado == "REPROVADA":
+            cel_resultado.fill = PatternFill("solid", fgColor=VERMELHO)
+        else:
+            cel_resultado.fill = PatternFill("solid", fgColor=AMARELO)
+        cel_resultado.font = Font(bold=True)
+
+    for col_idx in range(1, len(colunas) + 1):
+        ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = 22
+
+    ws_resumo = wb.create_sheet("Resumo")
+    ws_resumo.append(["Indicador", "Quantidade"])
+    total = len(df)
+    aprovadas = int((df["Resultado_Geral"] == "APROVADA").sum()) if total else 0
+    reprovadas = int((df["Resultado_Geral"] == "REPROVADA").sum()) if total else 0
+    pendentes = int((df["Resultado_Geral"] == "PENDENTE").sum()) if total else 0
+    pct_aprov = round((aprovadas / total) * 100, 1) if total else 0
+    for item in [
+        ("Total de câmeras LPR", total),
+        ("Aprovadas", aprovadas),
+        ("Reprovadas", reprovadas),
+        ("Pendentes", pendentes),
+        ("% Aprovação", f"{pct_aprov}%"),
+    ]:
+        ws_resumo.append(list(item))
+    for cell in ws_resumo[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor=AZUL_HEADER)
+    ws_resumo.column_dimensions["A"].width = 28
+    ws_resumo.column_dimensions["B"].width = 18
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
+def gerar_html_auditoria_lpr(df_lpr, titulo_filtro="Todos os clientes"):
+    df = df_lpr.copy()
+    total = len(df)
+    aprovadas = int((df["Resultado_Geral"] == "APROVADA").sum()) if total else 0
+    reprovadas = int((df["Resultado_Geral"] == "REPROVADA").sum()) if total else 0
+    pendentes = int((df["Resultado_Geral"] == "PENDENTE").sum()) if total else 0
+    pct_aprov = round((aprovadas / total) * 100, 1) if total else 0
+
+    def badge(resultado):
+        resultado = str(resultado or "PENDENTE").upper()
+        if resultado == "APROVADA":
+            return "background:#d8f3dc;color:#14532d;"
+        if resultado == "REPROVADA":
+            return "background:#ffd6d6;color:#7f1d1d;"
+        return "background:#fff3bf;color:#7c5c00;"
+
+    html = [f"""
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Relatório Auditoria LPR</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; color: #1f2937; margin: 28px; }}
+            h1 {{ color: #1F4E79; margin-bottom: 4px; }}
+            .sub {{ color: #4b5563; margin-bottom: 24px; }}
+            .cards {{ display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }}
+            .card {{ border: 1px solid #d1d5db; border-radius: 10px; padding: 12px 16px; min-width: 145px; }}
+            .card b {{ display: block; font-size: 22px; margin-top: 6px; }}
+            table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
+            th {{ background: #1F4E79; color: white; padding: 8px; border: 1px solid #cbd5e1; text-align: left; }}
+            td {{ padding: 7px; border: 1px solid #e5e7eb; vertical-align: top; }}
+            tr:nth-child(even) {{ background: #f8fafc; }}
+            .badge {{ border-radius: 999px; padding: 4px 8px; font-weight: bold; display: inline-block; }}
+        </style>
+    </head>
+    <body>
+        <h1>Relatório de Auditoria LPR</h1>
+        <div class="sub">Filtro: {titulo_filtro} | Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}</div>
+        <div class="cards">
+            <div class="card">Total LPR<b>{total}</b></div>
+            <div class="card">Aprovadas<b>{aprovadas}</b></div>
+            <div class="card">Reprovadas<b>{reprovadas}</b></div>
+            <div class="card">Pendentes<b>{pendentes}</b></div>
+            <div class="card">% Aprovação<b>{pct_aprov}%</b></div>
+        </div>
+    """]
+
+    if df.empty:
+        html.append("<p>Nenhuma câmera LPR encontrada para o filtro selecionado.</p>")
+    else:
+        html.append("""
+        <table>
+            <tr>
+                <th>Cliente</th>
+                <th>ID Câmera</th>
+                <th>Nome da Câmera</th>
+                <th>Status Conexão</th>
+                <th>LPR efetiva?</th>
+                <th>Resultado</th>
+                <th>Observações</th>
+            </tr>
+        """)
+        for _, row in df.iterrows():
+            resultado = str(row.get("Resultado_Geral", "PENDENTE") or "PENDENTE").upper()
+            html.append(f"""
+            <tr>
+                <td>{row.get('ID_Whitelabel', '')} - {row.get('Franqueado', '')}</td>
+                <td>{row.get('ID_da_Camera', '')}</td>
+                <td>{row.get('Nome_da_Camera', '')}</td>
+                <td>{row.get('Status_da_Camera', '')}</td>
+                <td>{row.get('LPR lendo de forma efetiva', '')}</td>
+                <td><span class="badge" style="{badge(resultado)}">{resultado}</span></td>
+                <td>{row.get('Observacoes', '')}</td>
+            </tr>
+            """)
+        html.append("</table>")
+
+    html.append("</body></html>")
+    return "".join(html)
+
+
+def exibir_auditoria_lpr(cameras_df, df_salvos, id_cliente_selecionado=None):
+    st.subheader("🔎 Auditoria LPR")
+    st.caption("Lista somente câmeras que possuem **LPR** no nome, considerando o cliente filtrado na aba Realizar Auditoria.")
+
+    clientes_lista = cameras_df[["ID_Whitelabel", "Franqueado"]].drop_duplicates().sort_values("Franqueado") if cameras_df is not None and not cameras_df.empty else pd.DataFrame()
+    opcoes_cliente = ["Todos os clientes"]
+    if not clientes_lista.empty:
+        opcoes_cliente += [f"{row['ID_Whitelabel']} - {row['Franqueado']}" for _, row in clientes_lista.iterrows()]
+
+    if id_cliente_selecionado:
+        id_atual = str(id_cliente_selecionado).strip()
+        opcao_atual = next((op for op in opcoes_cliente if op.startswith(f"{id_atual} - ")), "Todos os clientes")
+        index_padrao = opcoes_cliente.index(opcao_atual) if opcao_atual in opcoes_cliente else 0
+    else:
+        index_padrao = 0
+
+    filtro_lpr = st.selectbox(
+        "Cliente para Auditoria LPR",
+        opcoes_cliente,
+        index=index_padrao,
+        key="filtro_cliente_auditoria_lpr"
+    )
+
+    id_filtro_lpr = None if filtro_lpr == "Todos os clientes" else filtro_lpr.split(" - ")[0].strip()
+    titulo_filtro = filtro_lpr
+
+    df_lpr = preparar_df_auditoria_lpr(cameras_df, df_salvos, id_filtro_lpr)
+
+    if df_lpr.empty:
+        st.info("Nenhuma câmera com LPR no nome encontrada para esse filtro.")
+        return
+
+    total_lpr = len(df_lpr)
+    aprovadas = int((df_lpr["Resultado_Geral"] == "APROVADA").sum())
+    reprovadas = int((df_lpr["Resultado_Geral"] == "REPROVADA").sum())
+    pendentes = int((df_lpr["Resultado_Geral"] == "PENDENTE").sum())
+    pct_aprov = round((aprovadas / total_lpr) * 100, 1) if total_lpr else 0
+
+    col_lpr1, col_lpr2, col_lpr3, col_lpr4, col_lpr5 = st.columns(5)
+    col_lpr1.metric("Câmeras LPR", total_lpr)
+    col_lpr2.metric("Aprovadas", aprovadas)
+    col_lpr3.metric("Reprovadas", reprovadas)
+    col_lpr4.metric("Pendentes", pendentes)
+    col_lpr5.metric("% Aprovação", f"{pct_aprov}%")
+
+    st.divider()
+
+    filtro_resultado = st.radio(
+        "Resultado",
+        ["Todos", "APROVADA", "REPROVADA", "PENDENTE"],
+        horizontal=True,
+        key="filtro_resultado_auditoria_lpr"
+    )
+
+    df_exibir = df_lpr.copy()
+    if filtro_resultado != "Todos":
+        df_exibir = df_exibir[df_exibir["Resultado_Geral"] == filtro_resultado]
+
+    colunas_exibir = [
+        "ID_Whitelabel", "Franqueado", "Cidade", "UF", "ID_da_Camera", "Nome_da_Camera",
+        "Status_da_Camera", "Data_Auditoria", "LPR lendo de forma efetiva", "Resultado_Geral", "Observacoes"
+    ]
+    colunas_exibir = [c for c in colunas_exibir if c in df_exibir.columns]
+    st.dataframe(df_exibir[colunas_exibir], use_container_width=True, hide_index=True)
+
+    st.divider()
+    st.subheader("📄 Relatórios LPR")
+    col_rel1, col_rel2 = st.columns(2)
+
+    with col_rel1:
+        excel_lpr = gerar_excel_auditoria_lpr(df_lpr)
+        st.download_button(
+            label="⬇️ Baixar Excel Auditoria LPR",
+            data=excel_lpr,
+            file_name=f"auditoria_lpr_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_excel_auditoria_lpr"
+        )
+
+    with col_rel2:
+        html_lpr = gerar_html_auditoria_lpr(df_lpr, titulo_filtro)
+        st.download_button(
+            label="⬇️ Baixar HTML Auditoria LPR",
+            data=html_lpr,
+            file_name=f"auditoria_lpr_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+            mime="text/html",
+            key="download_html_auditoria_lpr"
+        )
+
 # ── Interface Principal ──────────────────────────────────────────────────────
 def main():
     tela_login()
@@ -1848,7 +2148,7 @@ def main():
     if "id_cliente_selecionado" not in st.session_state:
         st.session_state["id_cliente_selecionado"] = None
 
-    tab_auditoria, tab_evidencias, tab_agrupamento, tab_importacao = st.tabs(["💻 Realizar Auditoria", "📸 Anexar Evidências (Apenas Reprovadas)", "📊 Reprovadas por Cliente", "📥 Importar Base GOV"])
+    tab_auditoria, tab_evidencias, tab_agrupamento, tab_lpr, tab_importacao = st.tabs(["💻 Realizar Auditoria", "📸 Anexar Evidências (Apenas Reprovadas)", "📊 Reprovadas por Cliente", "🔎 Auditoria LPR", "📥 Importar Base GOV"])
 
     # =========================================================================
     # ABA 1: REALIZAR AUDITORIA
@@ -2433,7 +2733,13 @@ def main():
 
 
     # =========================================================================
-    # ABA 4: IMPORTAÇÃO DA BASE GOV
+    # ABA 4: AUDITORIA LPR
+    # =========================================================================
+    with tab_lpr:
+        exibir_auditoria_lpr(cameras_df, df_salvos, st.session_state.get("id_cliente_selecionado"))
+
+    # =========================================================================
+    # ABA 5: IMPORTAÇÃO DA BASE GOV
     # =========================================================================
     with tab_importacao:
         exibir_importacao_base_gov()

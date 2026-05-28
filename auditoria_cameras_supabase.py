@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 import uuid
-import hmac
 from datetime import datetime
 from io import BytesIO
 from urllib.parse import urlparse
@@ -46,44 +45,6 @@ SUPABASE_KEY = (
 )
 SUPABASE_BUCKET = st.secrets.get("SUPABASE_BUCKET", os.getenv("SUPABASE_BUCKET", "evidencias"))
 
-# ── Login simples do app ────────────────────────────────────────────────────
-# Para publicar com segurança, você pode colocar estes valores no Streamlit Secrets:
-# APP_USERS = "Fernando,Natanael,Cristina"
-# APP_PASSWORD = "sua-senha"
-APP_USERS = [
-    u.strip().lower()
-    for u in str(st.secrets.get("APP_USERS", os.getenv("APP_USERS", "Fernando,Natanael,Cristina"))).split(",")
-    if u.strip()
-]
-APP_PASSWORD = str(st.secrets.get("APP_PASSWORD", os.getenv("APP_PASSWORD", "camerite@123")))
-
-
-def tela_login():
-    """Bloqueia o acesso ao sistema até o usuário autenticar."""
-    if st.session_state.get("autenticado"):
-        return True
-
-    st.title("🔐 Acesso restrito")
-    st.caption("Entre com seu usuário e senha para acessar a Central de Auditoria de Câmeras.")
-
-    with st.form("form_login"):
-        usuario = st.text_input("Usuário").strip().lower()
-        senha = st.text_input("Senha", type="password")
-        entrar = st.form_submit_button("Entrar", type="primary")
-
-    if entrar:
-        usuario_ok = usuario in APP_USERS
-        senha_ok = hmac.compare_digest(senha, APP_PASSWORD)
-        if usuario_ok and senha_ok:
-            st.session_state["autenticado"] = True
-            st.session_state["usuario_logado"] = usuario
-            st.rerun()
-        else:
-            st.error("Usuário ou senha inválidos.")
-
-    st.stop()
-
-
 # Fallback local apenas para testes no seu computador.
 PASTA_EVIDENCIAS = os.path.join(BASE_DIR, "Evidencias")
 PASTA_THUMBNAILS = os.path.join(BASE_DIR, "Evidencias", "Thumbnails")
@@ -108,14 +69,19 @@ def caminho_existe(caminho):
         return False
     if caminho.startswith("http://") or caminho.startswith("https://"):
         return True
-    return caminho_existe(caminho)
+    return os.path.exists(caminho)
+
+@st.cache_data(ttl=300, show_spinner=False)
+def baixar_imagem_url(caminho):
+    """Baixa imagem remota uma vez e reaproveita por 5 min para deixar tela/relatórios mais leves."""
+    resp = requests.get(caminho, timeout=20)
+    resp.raise_for_status()
+    return resp.content
 
 def abrir_imagem(caminho):
     caminho = str(caminho or "").strip()
     if caminho.startswith("http://") or caminho.startswith("https://"):
-        resp = requests.get(caminho, timeout=20)
-        resp.raise_for_status()
-        return Image.open(BytesIO(resp.content))
+        return Image.open(BytesIO(baixar_imagem_url(caminho)))
     return Image.open(caminho)
 
 # ── Perguntas da auditoria ───────────────────────────────────────────────────
@@ -403,26 +369,48 @@ def preparar_imagem_para_excel(caminho, largura_max=900):
         return None
 
 def salvar_evidencia_otimizada(arquivo_upload, id_camera):
-    """Salva a evidência no Supabase Storage e retorna URLs públicas."""
+    """Salva evidência comprimida no Supabase Storage e retorna URLs públicas.
+
+    Otimização fase 1:
+    - imagem principal limitada a 1280px
+    - JPEG qualidade 68
+    - thumbnail limitada a 320px
+    - upload menor e listagem mais rápida
+    """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     identificador_unico = uuid.uuid4().hex[:8]
-    nome_base = f"evidencia_{id_camera}_{timestamp}_{identificador_unico}"
-    caminho_storage = f"{id_camera}/{nome_base}.jpg"
-    caminho_thumb_storage = f"{id_camera}/{nome_base}_thumb.jpg"
+    id_camera_limpo = str(id_camera).strip().replace("/", "_").replace("\\", "_")
+    nome_base = f"evidencia_{id_camera_limpo}_{timestamp}_{identificador_unico}"
+    caminho_storage = f"{id_camera_limpo}/{nome_base}.jpg"
+    caminho_thumb_storage = f"{id_camera_limpo}/{nome_base}_thumb.jpg"
 
     with Image.open(arquivo_upload) as img:
         img = img.convert("RGB")
 
+        # Principal: suficiente para auditoria, mas bem mais leve para internet.
         img_principal = img.copy()
-        img_principal.thumbnail((1600, 1600), Image.LANCZOS)
+        img_principal.thumbnail((1280, 1280), Image.LANCZOS)
         buffer_principal = BytesIO()
-        img_principal.save(buffer_principal, "JPEG", quality=78, optimize=True)
+        img_principal.save(
+            buffer_principal,
+            "JPEG",
+            quality=68,
+            optimize=True,
+            progressive=True,
+        )
         buffer_principal.seek(0)
 
+        # Thumbnail: usada nas listagens/galeria para carregar quase instantâneo.
         img_thumb = img.copy()
-        img_thumb.thumbnail((420, 420), Image.LANCZOS)
+        img_thumb.thumbnail((320, 320), Image.LANCZOS)
         buffer_thumb = BytesIO()
-        img_thumb.save(buffer_thumb, "JPEG", quality=70, optimize=True)
+        img_thumb.save(
+            buffer_thumb,
+            "JPEG",
+            quality=60,
+            optimize=True,
+            progressive=True,
+        )
         buffer_thumb.seek(0)
 
     supabase = get_supabase_client()
@@ -520,10 +508,10 @@ def carregar_todos_registros():
 
     return df
 
-# O banco só é inicializado depois do login.
+inicializar_db()
 
 # ── Carregamento dos dados das Câmeras e Clientes ───────────────────────────
-@st.cache_data
+@st.cache_data(ttl=3600, show_spinner=False)
 def carregar_arquivos_origem():
     try:
         clientes_df = pd.read_excel(CLIENTES, dtype={"ID_Whitelabel": str})
@@ -1432,9 +1420,6 @@ def exibir_pdf_reprovadas_auditoria(df_salvos, id_cliente_selecionado=None):
 
 # ── Interface Principal ──────────────────────────────────────────────────────
 def main():
-    tela_login()
-    inicializar_db()
-
     st.title("📷 Central de Auditoria de Câmeras")
 
     cameras_df, erro = carregar_arquivos_origem()
@@ -1780,7 +1765,7 @@ def main():
                                         if dados_removidos:
                                             excluir_arquivo_se_existir(dados_removidos.get("Caminho_Evidencia", ""))
                                             excluir_arquivo_se_existir(dados_removidos.get("Caminho_Thumbnail", ""))
-                                        st.cache_data.clear()
+                                        # Não limpar todos os caches aqui: evita reler o CSV gigante a cada evidência.
                                         st.success("Evidência removida.")
                                         st.rerun()
                     else:
@@ -1823,7 +1808,7 @@ def main():
                                     adicionar_evidencia(id_reprovada, caminho_final_foto, caminho_thumb, observacao_evidencia)
                                     qtd_adicionada += 1
 
-                            st.cache_data.clear()
+                            # Não limpar todos os caches aqui: evita reler o CSV gigante a cada upload.
                             st.session_state[f"upload_reset_{id_reprovada}"] += 1
                             st.success(f"✅ {qtd_adicionada} nova(s) evidência(s) adicionada(s) à galeria!")
                             st.rerun()

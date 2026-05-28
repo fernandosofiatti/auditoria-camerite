@@ -618,8 +618,37 @@ def preparar_csv_gov_para_importacao(arquivo_csv):
     for col in df.columns:
         df[col] = df[col].fillna("").astype(str).str.strip()
 
-    df["status_da_camera"] = df["status_da_camera"].str.upper()
-    df = df[df["id_da_camera"] != ""].drop_duplicates(subset=["id_da_camera"], keep="last")
+    # Normaliza campos numéricos. Evita erro de BIGINT quando vier vazio no CSV.
+    for col_num in ["id_whitelabel", "id_da_camera"]:
+        if col_num in df.columns:
+            df[col_num] = pd.to_numeric(df[col_num], errors="coerce")
+
+    # Remove linhas sem ID de câmera, pois ele é a chave única do UPSERT.
+    df = df[df["id_da_camera"].notna()].copy()
+
+    # Normaliza datas em padrão brasileiro, exemplo: 29/11/2024 13:08.
+    # O Postgres espera ISO ou timestamp nativo; enviar DD/MM/YYYY causa erro de datestyle.
+    colunas_data = [
+        "data_de_cadastro",
+        "data_de_exclusao",
+        "ultima_atualizacao",
+        "data_ultima_limpeza_dados",
+        "data_de_inativacao",
+    ]
+    for col_data in colunas_data:
+        if col_data in df.columns:
+            serie = df[col_data].replace({"": None, "nan": None, "NaN": None, "None": None})
+            datas = pd.to_datetime(serie, dayfirst=True, errors="coerce")
+            df[col_data] = datas.dt.to_pydatetime()
+            df[col_data] = df[col_data].where(pd.notna(df[col_data]), None)
+
+    # Converte NaN dos numéricos para None e inteiros válidos para int Python.
+    for col_num in ["id_whitelabel", "id_da_camera"]:
+        if col_num in df.columns:
+            df[col_num] = df[col_num].apply(lambda x: int(x) if pd.notna(x) else None)
+
+    df["status_da_camera"] = df["status_da_camera"].fillna("").astype(str).str.upper().str.strip()
+    df = df.drop_duplicates(subset=["id_da_camera"], keep="last")
     return df
 
 

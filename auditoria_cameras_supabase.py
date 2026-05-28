@@ -1559,18 +1559,7 @@ def exibir_pdf_reprovadas_auditoria(df_salvos, id_cliente_selecionado=None):
             st.success("Versão HTML gerada. Baixe o arquivo abaixo e abra no navegador.")
 
         if f"email_corpo_{sufixo_arquivo}" in st.session_state:
-            st.text_input(
-                "Assunto sugerido",
-                value=st.session_state.get(f"email_assunto_{sufixo_arquivo}", ""),
-                key=f"email_assunto_view_{sufixo_arquivo}"
-            )
-            st.text_area(
-                "Corpo do e-mail para copiar e colar",
-                value=st.session_state.get(f"email_corpo_{sufixo_arquivo}", ""),
-                height=420,
-                key=f"email_corpo_view_{sufixo_arquivo}"
-            )
-            st.download_button(
+             st.download_button(
                 label="⬇️ Baixar versão HTML do relatório",
                 data=st.session_state.get(f"email_html_{sufixo_arquivo}", ""),
                 file_name=f"relatorio_reprovadas_{sufixo_arquivo}.html",

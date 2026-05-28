@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from urllib.parse import urlparse
+from html import escape
 import requests
 import psycopg2
 import psycopg2.extras
@@ -1258,53 +1259,84 @@ def exibir_historico_auditoria_agrupado(df_salvos, id_cliente_selecionado=None):
 
 
 def montar_html_email_reprovadas(df_registros, titulo_filtro="Todos os clientes"):
-    """Monta o corpo HTML do e-mail com o conteúdo textual/fotográfico das reprovadas."""
+    """Monta um relatório HTML standalone, parecido com o PDF, usando URLs públicas das evidências."""
     df = preparar_df_reprovadas_agrupado(df_registros)
     data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
 
+    total = len(df)
+    clientes = df["ID_Whitelabel"].astype(str).nunique() if not df.empty and "ID_Whitelabel" in df.columns else 0
+    total_evidencias = 0
+    if not df.empty:
+        total_evidencias = sum(contar_evidencias_camera(row.to_dict()) for _, row in df.iterrows())
+
     html = []
-    html.append("""
-    <html>
-    <body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1f1f1f;">
-    """)
-    html.append("<p>Prezados,</p>")
-    html.append("<p>Segue abaixo o relatório das câmeras reprovadas na auditoria.</p>")
-    html.append(f"<p><b>Filtro:</b> {titulo_filtro}<br>")
-    html.append(f"<b>Gerado em:</b> {data_geracao}<br>")
-    html.append(f"<b>Total de câmeras reprovadas:</b> {len(df)}</p>")
+    html.append("""<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório de Câmeras Reprovadas</title>
+<style>
+    body { font-family: Arial, Calibri, sans-serif; color: #1f2937; margin: 0; background: #f3f6fa; }
+    .page { max-width: 1040px; margin: 24px auto; background: #fff; padding: 28px; border-radius: 14px; box-shadow: 0 8px 24px rgba(15,23,42,.10); }
+    .header { border-bottom: 4px solid #1F4E79; padding-bottom: 14px; margin-bottom: 22px; }
+    h1 { margin: 0; color: #1F4E79; font-size: 26px; }
+    h2 { color: #1F4E79; border-bottom: 1px solid #d7e3ef; padding-bottom: 6px; margin-top: 32px; }
+    h3 { margin: 0 0 10px 0; color: #991b1b; }
+    .muted { color: #64748b; font-size: 13px; }
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 24px; }
+    .card { background: #eef6fd; border: 1px solid #cfe4f4; border-radius: 10px; padding: 14px; text-align: center; }
+    .card .num { font-size: 24px; font-weight: 700; color: #1F4E79; }
+    .card .label { font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .04em; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0 24px; }
+    th { background: #1F4E79; color: #fff; text-align: left; padding: 9px; border: 1px solid #dbeafe; }
+    td { padding: 9px; border: 1px solid #e2e8f0; vertical-align: top; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .camera { border: 1px solid #e2e8f0; border-left: 6px solid #ef4444; border-radius: 12px; padding: 16px; margin: 18px 0; page-break-inside: avoid; }
+    .details { line-height: 1.55; margin-bottom: 12px; }
+    .img-wrap { margin: 12px 0 18px; }
+    .img-wrap img { display: block; max-width: 100%; height: auto; border: 1px solid #cbd5e1; border-radius: 8px; }
+    .img-caption { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .no-img { color: #64748b; font-style: italic; background: #f8fafc; padding: 10px; border-radius: 8px; }
+    @media print { body { background: #fff; } .page { box-shadow: none; margin: 0; max-width: none; } .camera { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="page">
+""")
+    html.append("<div class='header'>")
+    html.append("<h1>Relatório de Câmeras Reprovadas</h1>")
+    html.append(f"<div class='muted'>Filtro: <b>{escape(str(titulo_filtro))}</b> · Gerado em: {escape(data_geracao)}</div>")
+    html.append("</div>")
+
+    html.append("<div class='cards'>")
+    html.append(f"<div class='card'><div class='num'>{total}</div><div class='label'>Reprovadas</div></div>")
+    html.append(f"<div class='card'><div class='num'>{clientes}</div><div class='label'>Clientes</div></div>")
+    html.append(f"<div class='card'><div class='num'>{total_evidencias}</div><div class='label'>Evidências</div></div>")
+    html.append(f"<div class='card'><div class='num'>{escape(str(titulo_filtro))}</div><div class='label'>Filtro</div></div>")
+    html.append("</div>")
 
     if df.empty:
-        html.append("<p>Nenhuma câmera reprovada encontrada para o filtro selecionado.</p>")
-        html.append("</body></html>")
+        html.append("<p class='no-img'>Nenhuma câmera reprovada encontrada para o filtro selecionado.</p>")
+        html.append("</div></body></html>")
         return "".join(html), []
 
-    html.append("""
-    <table style="border-collapse: collapse; width: 100%; margin-bottom: 18px;">
-        <tr style="background-color: #1F4E79; color: white;">
-            <th style="border: 1px solid #999; padding: 6px; text-align:left;">ID</th>
-            <th style="border: 1px solid #999; padding: 6px; text-align:left;">Cliente</th>
-            <th style="border: 1px solid #999; padding: 6px; text-align:center;">Reprovadas</th>
-            <th style="border: 1px solid #999; padding: 6px; text-align:center;">Evidências</th>
-        </tr>
-    """)
-
+    html.append("<h2>Resumo por Cliente</h2>")
+    html.append("<table><tr><th>ID</th><th>Cliente</th><th>Reprovadas</th><th>Evidências</th></tr>")
     for (id_wl, franq), grp in df.groupby(["ID_Whitelabel", "Franqueado"], dropna=False):
         total_evid = sum(contar_evidencias_camera(row.to_dict()) for _, row in grp.iterrows())
-        html.append(f"""
-        <tr>
-            <td style="border: 1px solid #999; padding: 6px;">{id_wl}</td>
-            <td style="border: 1px solid #999; padding: 6px;">{franq}</td>
-            <td style="border: 1px solid #999; padding: 6px; text-align:center;">{len(grp)}</td>
-            <td style="border: 1px solid #999; padding: 6px; text-align:center;">{total_evid}</td>
-        </tr>
-        """)
+        html.append(
+            "<tr>"
+            f"<td>{escape(str(id_wl))}</td>"
+            f"<td>{escape(str(franq))}</td>"
+            f"<td>{len(grp)}</td>"
+            f"<td>{total_evid}</td>"
+            "</tr>"
+        )
     html.append("</table>")
 
-    anexos_inline = []
-    idx_img = 1
-
     for (id_wl, franq), grp in df.groupby(["ID_Whitelabel", "Franqueado"], dropna=False):
-        html.append(f"<h2 style='color:#1F4E79; border-bottom:1px solid #ccc;'>Cliente: {id_wl} - {franq}</h2>")
+        html.append(f"<h2>Cliente: {escape(str(id_wl))} - {escape(str(franq))}</h2>")
         html.append(f"<p><b>Total de câmeras reprovadas:</b> {len(grp)}</p>")
 
         for _, row in grp.iterrows():
@@ -1314,37 +1346,47 @@ def montar_html_email_reprovadas(df_registros, titulo_filtro="Todos os clientes"
             obs = str(row.get("Observacoes", "") or "")
             evidencias = listar_evidencias(id_cam)
 
-            html.append("""
-            <div style="border: 1px solid #d9d9d9; border-radius: 6px; padding: 10px; margin: 12px 0;">
-            """)
-            html.append(f"<p style='margin:0 0 8px 0;'><b>ID da Câmera:</b> {id_cam}<br>")
-            html.append(f"<b>Nome:</b> {nome_cam}<br>")
-            html.append(f"<b>Cliente:</b> {franq}<br>")
-            html.append(f"<b>Cidade/UF:</b> {cidade_uf}<br>")
-            html.append(f"<b>Quantidade de evidências:</b> {len(evidencias)}<br>")
-            html.append(f"<b>Obs. auditoria:</b> {obs}</p>")
-
             caminhos_validos = []
             for ev in evidencias:
                 caminho_ev = str(ev.get("Caminho_Evidencia", "")).strip()
                 if caminho_ev and caminho_existe(caminho_ev):
-                    caminhos_validos.append(caminho_ev)
+                    caminhos_validos.append((caminho_ev, ev.get("Data_Upload", ""), ev.get("Observacao", "")))
+
+            if not caminhos_validos:
+                caminho_antigo = str(row.get("Caminho_Evidencia", "")).strip() if pd.notna(row.get("Caminho_Evidencia", "")) else ""
+                if caminho_antigo and caminho_existe(caminho_antigo):
+                    caminhos_validos.append((caminho_antigo, "", ""))
+
+            html.append("<div class='camera'>")
+            html.append(f"<h3>{escape(id_cam)} - {escape(nome_cam)}</h3>")
+            html.append("<div class='details'>")
+            html.append(f"<b>ID da Câmera:</b> {escape(id_cam)}<br>")
+            html.append(f"<b>Nome:</b> {escape(nome_cam)}<br>")
+            html.append(f"<b>Cliente:</b> {escape(str(franq))}<br>")
+            html.append(f"<b>Cidade/UF:</b> {escape(cidade_uf)}<br>")
+            html.append(f"<b>Total de evidências:</b> {len(caminhos_validos)}<br>")
+            html.append(f"<b>Obs. auditoria:</b> {escape(obs) if obs else 'Sem observações.'}")
+            html.append("</div>")
 
             if caminhos_validos:
-                for caminho_ev in caminhos_validos:
-                    cid = f"evidencia_{id_cam}_{idx_img}"
-                    anexos_inline.append({"path": caminho_ev, "cid": cid})
-                    html.append(f"<div style='margin-top:8px;'><img src='cid:{cid}' style='max-width: 760px; width: 100%; height: auto; border: 1px solid #ccc;'></div>")
-                    idx_img += 1
+                for idx, (url_img, data_upload, obs_foto) in enumerate(caminhos_validos, start=1):
+                    html.append("<div class='img-wrap'>")
+                    html.append(f"<img src='{escape(str(url_img), quote=True)}' alt='Evidência {idx} - câmera {escape(id_cam, quote=True)}'>")
+                    legenda = []
+                    if data_upload:
+                        legenda.append(f"Upload: {data_upload}")
+                    if obs_foto:
+                        legenda.append(f"Obs. evidência: {obs_foto}")
+                    if legenda:
+                        html.append(f"<div class='img-caption'>{escape(' · '.join(map(str, legenda)))}</div>")
+                    html.append("</div>")
             else:
-                html.append("<p><i>Sem evidência fotográfica vinculada.</i></p>")
+                html.append("<p class='no-img'>Sem evidência fotográfica vinculada.</p>")
 
             html.append("</div>")
 
-    html.append("<p>Atenciosamente,</p>")
-    html.append("</body></html>")
-    return "".join(html), anexos_inline
-
+    html.append("</div></body></html>")
+    return "".join(html), []
 
 def montar_texto_email_reprovadas(df_registros, titulo_filtro="Todos os clientes"):
     """Monta um corpo de e-mail em texto simples para copiar e colar no Outlook/Webmail."""
@@ -1506,14 +1548,15 @@ def exibir_pdf_reprovadas_auditoria(df_salvos, id_cliente_selecionado=None):
             key=f"download_pdf_auditoria_{sufixo_arquivo}"
         )
 
-        st.caption("Online o Streamlit não consegue abrir o Outlook local. Use o botão abaixo para gerar o conteúdo e copiar para seu e-mail.")
-        if st.button("📧 Gerar conteúdo do e-mail", type="secondary", key=f"btn_email_texto_{sufixo_arquivo}"):
+        st.caption("Online o Streamlit não consegue abrir o Outlook local. Use o botão abaixo para gerar uma versão HTML do relatório, parecida com o PDF, com as imagens por link público.")
+        if st.button("🌐 Gerar versão HTML do relatório", type="secondary", key=f"btn_email_texto_{sufixo_arquivo}"):
             assunto_email = f"Relatório de Câmeras Reprovadas - {titulo_filtro}"
             corpo_email = montar_texto_email_reprovadas(df_pdf, titulo_filtro)
             html_email, _ = montar_html_email_reprovadas(df_pdf, titulo_filtro)
             st.session_state[f"email_assunto_{sufixo_arquivo}"] = assunto_email
             st.session_state[f"email_corpo_{sufixo_arquivo}"] = corpo_email
             st.session_state[f"email_html_{sufixo_arquivo}"] = html_email
+            st.success("Versão HTML gerada. Baixe o arquivo abaixo e abra no navegador.")
 
         if f"email_corpo_{sufixo_arquivo}" in st.session_state:
             st.text_input(
@@ -1528,9 +1571,9 @@ def exibir_pdf_reprovadas_auditoria(df_salvos, id_cliente_selecionado=None):
                 key=f"email_corpo_view_{sufixo_arquivo}"
             )
             st.download_button(
-                label="⬇️ Baixar versão HTML do e-mail",
+                label="⬇️ Baixar versão HTML do relatório",
                 data=st.session_state.get(f"email_html_{sufixo_arquivo}", ""),
-                file_name=f"email_reprovadas_{sufixo_arquivo}.html",
+                file_name=f"relatorio_reprovadas_{sufixo_arquivo}.html",
                 mime="text/html",
                 key=f"download_email_html_{sufixo_arquivo}"
             )

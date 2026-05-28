@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import uuid
+import hmac
 from datetime import datetime
 from io import BytesIO
 from urllib.parse import urlparse
@@ -44,6 +45,49 @@ SUPABASE_KEY = (
     or st.secrets.get("SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY", ""))
 )
 SUPABASE_BUCKET = st.secrets.get("SUPABASE_BUCKET", os.getenv("SUPABASE_BUCKET", "evidencias"))
+
+# ── Login simples do app ────────────────────────────────────────────────────
+# Para publicar com segurança, você pode colocar estes valores no Streamlit Secrets:
+# APP_USERS = "fernando,natanael,cristina"
+# APP_PASSWORD = "sua-senha"
+APP_USERS = [
+    u.strip().lower()
+    for u in str(st.secrets.get("APP_USERS", os.getenv("APP_USERS", "fernando,natanael,cristina"))).split(",")
+    if u.strip()
+]
+APP_PASSWORD = str(st.secrets.get("APP_PASSWORD", os.getenv("APP_PASSWORD", "camerite@123")))
+
+
+def tela_login():
+    """Bloqueia o acesso ao sistema até o usuário autenticar."""
+    if st.session_state.get("autenticado"):
+        with st.sidebar:
+            st.success(f"Logado: {st.session_state.get('usuario_logado', '')}")
+            if st.button("Sair", key="btn_logout"):
+                st.session_state.clear()
+                st.rerun()
+        return True
+
+    st.title("🔐 Acesso restrito")
+    st.caption("Entre com seu usuário e senha para acessar a Central de Auditoria de Câmeras.")
+
+    with st.form("form_login"):
+        usuario = st.text_input("Usuário").strip().lower()
+        senha = st.text_input("Senha", type="password")
+        entrar = st.form_submit_button("Entrar", type="primary")
+
+    if entrar:
+        usuario_ok = usuario in APP_USERS
+        senha_ok = hmac.compare_digest(senha, APP_PASSWORD)
+        if usuario_ok and senha_ok:
+            st.session_state["autenticado"] = True
+            st.session_state["usuario_logado"] = usuario
+            st.rerun()
+        else:
+            st.error("Usuário ou senha inválidos.")
+
+    st.stop()
+
 
 # Fallback local apenas para testes no seu computador.
 PASTA_EVIDENCIAS = os.path.join(BASE_DIR, "Evidencias")
@@ -481,7 +525,7 @@ def carregar_todos_registros():
 
     return df
 
-inicializar_db()
+# O banco só é inicializado depois do login.
 
 # ── Carregamento dos dados das Câmeras e Clientes ───────────────────────────
 @st.cache_data
@@ -1393,6 +1437,9 @@ def exibir_pdf_reprovadas_auditoria(df_salvos, id_cliente_selecionado=None):
 
 # ── Interface Principal ──────────────────────────────────────────────────────
 def main():
+    tela_login()
+    inicializar_db()
+
     st.title("📷 Central de Auditoria de Câmeras")
 
     cameras_df, erro = carregar_arquivos_origem()

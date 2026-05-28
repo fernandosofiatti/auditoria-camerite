@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import hmac
 import uuid
 from datetime import datetime
 from io import BytesIO
@@ -44,6 +45,39 @@ SUPABASE_KEY = (
     or st.secrets.get("SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY", ""))
 )
 SUPABASE_BUCKET = st.secrets.get("SUPABASE_BUCKET", os.getenv("SUPABASE_BUCKET", "evidencias"))
+
+# ── Login simples do app ────────────────────────────────────────────────────
+APP_USERS = [
+    u.strip().lower()
+    for u in str(st.secrets.get("APP_USERS", os.getenv("APP_USERS", "fernando,natanael,cristina"))).split(",")
+    if u.strip()
+]
+APP_PASSWORD = str(st.secrets.get("APP_PASSWORD", os.getenv("APP_PASSWORD", "camerite@123")))
+
+def tela_login():
+    """Bloqueia o acesso ao sistema até o usuário autenticar."""
+    if st.session_state.get("autenticado"):
+        return True
+
+    st.title("🔐 Acesso restrito")
+    st.caption("Entre com seu usuário e senha para acessar a Central de Auditoria de Câmeras.")
+
+    with st.form("form_login"):
+        usuario = st.text_input("Usuário").strip().lower()
+        senha = st.text_input("Senha", type="password")
+        entrar = st.form_submit_button("Entrar", type="primary")
+
+    if entrar:
+        usuario_ok = usuario in APP_USERS
+        senha_ok = hmac.compare_digest(senha, APP_PASSWORD)
+        if usuario_ok and senha_ok:
+            st.session_state["autenticado"] = True
+            st.session_state["usuario_logado"] = usuario
+            st.rerun()
+        else:
+            st.error("Usuário ou senha inválidos.")
+
+    st.stop()
 
 # Fallback local apenas para testes no seu computador.
 PASTA_EVIDENCIAS = os.path.join(BASE_DIR, "Evidencias")
@@ -1312,6 +1346,70 @@ def montar_html_email_reprovadas(df_registros, titulo_filtro="Todos os clientes"
     return "".join(html), anexos_inline
 
 
+def montar_texto_email_reprovadas(df_registros, titulo_filtro="Todos os clientes"):
+    """Monta um corpo de e-mail em texto simples para copiar e colar no Outlook/Webmail."""
+    df = preparar_df_reprovadas_agrupado(df_registros)
+    data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    linhas = []
+    linhas.append("Prezados,")
+    linhas.append("")
+    linhas.append("Segue abaixo o relatório das câmeras reprovadas na auditoria.")
+    linhas.append("")
+    linhas.append(f"Filtro: {titulo_filtro}")
+    linhas.append(f"Gerado em: {data_geracao}")
+    linhas.append(f"Total de câmeras reprovadas: {len(df)}")
+    linhas.append("")
+
+    if df.empty:
+        linhas.append("Nenhuma câmera reprovada encontrada para o filtro selecionado.")
+        linhas.append("")
+        linhas.append("Atenciosamente,")
+        return "\n".join(linhas)
+
+    linhas.append("RESUMO POR CLIENTE")
+    linhas.append("-" * 60)
+    for (id_wl, franq), grp in df.groupby(["ID_Whitelabel", "Franqueado"], dropna=False):
+        total_evid = sum(contar_evidencias_camera(row.to_dict()) for _, row in grp.iterrows())
+        linhas.append(f"{id_wl} - {franq} | Reprovadas: {len(grp)} | Evidências: {total_evid}")
+
+    linhas.append("")
+    linhas.append("DETALHAMENTO")
+    linhas.append("=" * 60)
+
+    for (id_wl, franq), grp in df.groupby(["ID_Whitelabel", "Franqueado"], dropna=False):
+        linhas.append("")
+        linhas.append(f"CLIENTE: {id_wl} - {franq}")
+        linhas.append("-" * 60)
+
+        for _, row in grp.iterrows():
+            id_cam = str(row.get("ID_da_Camera", ""))
+            evidencias = listar_evidencias(id_cam)
+
+            linhas.append(f"ID da Câmera: {id_cam}")
+            linhas.append(f"Nome: {row.get('Nome_da_Camera', '')}")
+            linhas.append(f"Cidade/UF: {row.get('Cidade', '')}/{row.get('UF', '')}")
+            linhas.append(f"Obs. auditoria: {row.get('Observacoes', '')}")
+
+            links = []
+            for ev in evidencias:
+                caminho_ev = str(ev.get("Caminho_Evidencia", "")).strip()
+                if caminho_ev:
+                    links.append(caminho_ev)
+
+            if links:
+                linhas.append("Evidências:")
+                for idx, link in enumerate(links, start=1):
+                    linhas.append(f"  {idx}. {link}")
+            else:
+                linhas.append("Evidências: sem evidência fotográfica vinculada.")
+
+            linhas.append("")
+
+    linhas.append("Atenciosamente,")
+    return "\n".join(linhas)
+
+
 def abrir_email_outlook_classico_reprovadas(df_registros, titulo_filtro="Todos os clientes"):
     """Abre um novo e-mail no Outlook clássico com o relatório no corpo, sem assunto automático."""
     if os.name != "nt":
@@ -1408,18 +1506,40 @@ def exibir_pdf_reprovadas_auditoria(df_salvos, id_cliente_selecionado=None):
             key=f"download_pdf_auditoria_{sufixo_arquivo}"
         )
 
-        st.caption("O botão abaixo abre um novo e-mail no Outlook clássico com o conteúdo do relatório no corpo. O assunto fica em branco para você preencher.")
-        if st.button("📧 Abrir e-mail no Outlook com este conteúdo", type="secondary", key=f"btn_email_outlook_{sufixo_arquivo}"):
-            try:
-                with st.spinner("Abrindo e-mail no Outlook..."):
-                    abrir_email_outlook_classico_reprovadas(df_pdf, titulo_filtro)
-                st.success("E-mail aberto no Outlook. Revise o conteúdo antes de enviar.")
-            except Exception as e:
-                st.error(f"Não foi possível abrir o Outlook: {e}")
+        st.caption("Online o Streamlit não consegue abrir o Outlook local. Use o botão abaixo para gerar o conteúdo e copiar para seu e-mail.")
+        if st.button("📧 Gerar conteúdo do e-mail", type="secondary", key=f"btn_email_texto_{sufixo_arquivo}"):
+            assunto_email = f"Relatório de Câmeras Reprovadas - {titulo_filtro}"
+            corpo_email = montar_texto_email_reprovadas(df_pdf, titulo_filtro)
+            html_email, _ = montar_html_email_reprovadas(df_pdf, titulo_filtro)
+            st.session_state[f"email_assunto_{sufixo_arquivo}"] = assunto_email
+            st.session_state[f"email_corpo_{sufixo_arquivo}"] = corpo_email
+            st.session_state[f"email_html_{sufixo_arquivo}"] = html_email
+
+        if f"email_corpo_{sufixo_arquivo}" in st.session_state:
+            st.text_input(
+                "Assunto sugerido",
+                value=st.session_state.get(f"email_assunto_{sufixo_arquivo}", ""),
+                key=f"email_assunto_view_{sufixo_arquivo}"
+            )
+            st.text_area(
+                "Corpo do e-mail para copiar e colar",
+                value=st.session_state.get(f"email_corpo_{sufixo_arquivo}", ""),
+                height=420,
+                key=f"email_corpo_view_{sufixo_arquivo}"
+            )
+            st.download_button(
+                label="⬇️ Baixar versão HTML do e-mail",
+                data=st.session_state.get(f"email_html_{sufixo_arquivo}", ""),
+                file_name=f"email_reprovadas_{sufixo_arquivo}.html",
+                mime="text/html",
+                key=f"download_email_html_{sufixo_arquivo}"
+            )
 
 
 # ── Interface Principal ──────────────────────────────────────────────────────
 def main():
+    tela_login()
+
     st.title("📷 Central de Auditoria de Câmeras")
 
     cameras_df, erro = carregar_arquivos_origem()

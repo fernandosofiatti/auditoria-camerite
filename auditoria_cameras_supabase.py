@@ -164,6 +164,34 @@ def inicializar_db():
         )
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_evidencias_camera ON tbl_evidencias (id_da_camera)")
+
+    # Base de câmeras importada do CSV GOV.
+    # id_da_camera é UNIQUE para permitir UPSERT sem duplicar registros.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cameras_origem (
+            id BIGSERIAL PRIMARY KEY,
+            id_whitelabel TEXT,
+            nome_empresa TEXT,
+            business_model TEXT,
+            nome_da_camera TEXT,
+            id_da_camera TEXT UNIQUE NOT NULL,
+            status_da_camera TEXT,
+            data_de_cadastro TEXT,
+            data_de_exclusao TEXT,
+            ultima_atualizacao TEXT,
+            plano_contratado TEXT,
+            usuario_cadastro_camera TEXT,
+            email_usuario TEXT,
+            stream_name TEXT,
+            observacoes TEXT,
+            data_ultima_limpeza_dados TEXT,
+            data_de_inativacao TEXT,
+            data_importacao TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cameras_origem_id_camera ON cameras_origem (id_da_camera)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cameras_origem_whitelabel ON cameras_origem (id_whitelabel)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cameras_origem_status ON cameras_origem (status_da_camera)")
     conn.commit()
     cursor.close()
     conn.close()
@@ -544,6 +572,195 @@ def carregar_todos_registros():
     return df
 
 inicializar_db()
+
+
+# ── Importação da base GOV para o Supabase ──────────────────────────────────
+COLUNAS_CSV_GOV = {
+    "ID_Whitelabel": "id_whitelabel",
+    "Nome_Empresa": "nome_empresa",
+    "Business_Model": "business_model",
+    "Nome_da_Camera": "nome_da_camera",
+    "ID_da_Camera": "id_da_camera",
+    "Status_da_Camera": "status_da_camera",
+    "Data_de_Cadastro": "data_de_cadastro",
+    "Data_de_Exclusao": "data_de_exclusao",
+    "Ultima_Atualizacao": "ultima_atualizacao",
+    "Plano_Contratado": "plano_contratado",
+    "Usuario_Cadastro_Camera": "usuario_cadastro_camera",
+    "Email_Usuario": "email_usuario",
+    "Stream_Name": "stream_name",
+    "Observacoes": "observacoes",
+    "Data_Ultima_Limpeza_Dados": "data_ultima_limpeza_dados",
+    "Data_de_Inativacao": "data_de_inativacao",
+}
+
+
+def preparar_csv_gov_para_importacao(arquivo_csv):
+    """Lê o CSV GOV e devolve DataFrame normalizado para UPSERT no Supabase."""
+    try:
+        df = pd.read_csv(arquivo_csv, encoding="utf-8-sig", sep=";", dtype=str)
+    except Exception:
+        df = pd.read_csv(arquivo_csv, encoding="latin1", sep=";", dtype=str)
+
+    df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
+
+    faltantes = [col for col in ["ID_Whitelabel", "ID_da_Camera", "Nome_da_Camera", "Status_da_Camera"] if col not in df.columns]
+    if faltantes:
+        raise ValueError(f"CSV sem colunas obrigatórias: {', '.join(faltantes)}")
+
+    for coluna_original in COLUNAS_CSV_GOV:
+        if coluna_original not in df.columns:
+            df[coluna_original] = ""
+
+    df = df[list(COLUNAS_CSV_GOV.keys())].copy()
+    df = df.rename(columns=COLUNAS_CSV_GOV)
+
+    for col in df.columns:
+        df[col] = df[col].fillna("").astype(str).str.strip()
+
+    df["status_da_camera"] = df["status_da_camera"].str.upper()
+    df = df[df["id_da_camera"] != ""].drop_duplicates(subset=["id_da_camera"], keep="last")
+    return df
+
+
+def importar_cameras_origem_supabase(df_importacao):
+    """Insere novas câmeras e atualiza as existentes pelo id_da_camera, sem duplicar."""
+    if df_importacao is None or df_importacao.empty:
+        return {"total_csv": 0, "antes": 0, "depois": 0, "novas": 0, "atualizadas": 0}
+
+    colunas = list(COLUNAS_CSV_GOV.values())
+    registros = [tuple(row[col] for col in colunas) for _, row in df_importacao.iterrows()]
+
+    conn = get_db_conn()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM cameras_origem")
+    antes = int(cursor.fetchone()[0])
+
+    insert_sql = f"""
+        INSERT INTO cameras_origem ({', '.join(colunas)})
+        VALUES %s
+        ON CONFLICT (id_da_camera) DO UPDATE SET
+            id_whitelabel = EXCLUDED.id_whitelabel,
+            nome_empresa = EXCLUDED.nome_empresa,
+            business_model = EXCLUDED.business_model,
+            nome_da_camera = EXCLUDED.nome_da_camera,
+            status_da_camera = EXCLUDED.status_da_camera,
+            data_de_cadastro = EXCLUDED.data_de_cadastro,
+            data_de_exclusao = EXCLUDED.data_de_exclusao,
+            ultima_atualizacao = EXCLUDED.ultima_atualizacao,
+            plano_contratado = EXCLUDED.plano_contratado,
+            usuario_cadastro_camera = EXCLUDED.usuario_cadastro_camera,
+            email_usuario = EXCLUDED.email_usuario,
+            stream_name = EXCLUDED.stream_name,
+            observacoes = EXCLUDED.observacoes,
+            data_ultima_limpeza_dados = EXCLUDED.data_ultima_limpeza_dados,
+            data_de_inativacao = EXCLUDED.data_de_inativacao,
+            data_importacao = NOW()
+    """
+    psycopg2.extras.execute_values(cursor, insert_sql, registros, page_size=1000)
+    cursor.execute("SELECT COUNT(*) FROM cameras_origem")
+    depois = int(cursor.fetchone()[0])
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    novas = max(depois - antes, 0)
+    atualizadas = max(len(df_importacao) - novas, 0)
+    carregar_cameras_origem_db.clear()
+    carregar_arquivos_origem.clear()
+    return {"total_csv": len(df_importacao), "antes": antes, "depois": depois, "novas": novas, "atualizadas": atualizadas}
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_cameras_origem_db():
+    """Carrega a base GOV já importada no Supabase no mesmo formato que o app espera."""
+    try:
+        conn = get_db_conn()
+        df = pd.read_sql_query("""
+            SELECT
+                id_whitelabel AS "ID_Whitelabel",
+                nome_empresa AS "Nome_Empresa",
+                business_model AS "Business_Model",
+                nome_da_camera AS "Nome_da_Camera",
+                id_da_camera AS "ID_da_Camera",
+                status_da_camera AS "Status_da_Camera",
+                data_de_cadastro AS "Data_de_Cadastro",
+                data_de_exclusao AS "Data_de_Exclusao",
+                ultima_atualizacao AS "Ultima_Atualizacao",
+                plano_contratado AS "Plano_Contratado",
+                usuario_cadastro_camera AS "Usuario_Cadastro_Camera",
+                email_usuario AS "Email_Usuario",
+                stream_name AS "Stream_Name",
+                observacoes AS "Observacoes",
+                data_ultima_limpeza_dados AS "Data_Ultima_Limpeza_Dados",
+                data_de_inativacao AS "Data_de_Inativacao"
+            FROM cameras_origem
+        """, conn)
+        conn.close()
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
+def exibir_importacao_base_gov():
+    st.subheader("📥 Importar Base GOV de Câmeras")
+    st.caption("Use esta aba para atualizar status, inserir novas câmeras e manter a base sem duplicar registros.")
+
+    with st.expander("Como funciona", expanded=False):
+        st.markdown("""
+        - A chave de controle é **ID_da_Camera**.\n
+        - Se a câmera já existir, o app **atualiza** status, nome, plano, empresa e demais campos.\n
+        - Se for uma câmera nova, o app **insere**.\n
+        - Registros não são duplicados.\n
+        - As auditorias já salvas em `tbl_auditoria` não são apagadas.
+        """)
+
+    arquivo = st.file_uploader("Selecione o CSV GOV atualizado", type=["csv"], key="upload_csv_gov")
+
+    if arquivo is None:
+        df_atual = carregar_cameras_origem_db()
+        if df_atual.empty:
+            st.warning("Nenhuma base GOV importada ainda. Faça a primeira importação para o app usar o banco no lugar do CSV local.")
+        else:
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Câmeras no banco", len(df_atual))
+            col2.metric("Clientes", df_atual["ID_Whitelabel"].astype(str).nunique())
+            col3.metric("Offline", int((df_atual["Status_da_Camera"].astype(str).str.upper() == "OFFLINE").sum()))
+        return
+
+    try:
+        df_preview = preparar_csv_gov_para_importacao(arquivo)
+    except Exception as e:
+        st.error(f"Erro ao ler o CSV: {e}")
+        return
+
+    st.success(f"CSV lido com sucesso: {len(df_preview)} câmeras únicas encontradas.")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Câmeras no CSV", len(df_preview))
+    col2.metric("Clientes no CSV", df_preview["id_whitelabel"].astype(str).nunique())
+    col3.metric("Offline no CSV", int((df_preview["status_da_camera"].astype(str).str.upper() == "OFFLINE").sum()))
+
+    st.dataframe(
+        df_preview[["id_whitelabel", "nome_empresa", "id_da_camera", "nome_da_camera", "status_da_camera", "plano_contratado"]].head(100),
+        hide_index=True,
+        use_container_width=True
+    )
+    st.caption("Prévia limitada aos 100 primeiros registros.")
+
+    if st.button("🚀 Importar / Atualizar base no Supabase", type="primary"):
+        try:
+            with st.spinner("Importando base GOV para o Supabase..."):
+                resumo = importar_cameras_origem_supabase(df_preview)
+            st.success("Importação concluída com sucesso.")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Processados", resumo["total_csv"])
+            c2.metric("Novas câmeras", resumo["novas"])
+            c3.metric("Atualizadas", resumo["atualizadas"])
+            c4.metric("Total no banco", resumo["depois"])
+            st.info("A base foi atualizada. Troque de aba ou recarregue a página para navegar com a base nova.")
+        except Exception as e:
+            st.error(f"Erro ao importar para o Supabase: {e}")
+
 
 # ── Carregamento dos dados das Câmeras e Clientes ───────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -1559,7 +1776,18 @@ def exibir_pdf_reprovadas_auditoria(df_salvos, id_cliente_selecionado=None):
             st.success("Versão HTML gerada. Baixe o arquivo abaixo e abra no navegador.")
 
         if f"email_corpo_{sufixo_arquivo}" in st.session_state:
-             st.download_button(
+            st.text_input(
+                "Assunto sugerido",
+                value=st.session_state.get(f"email_assunto_{sufixo_arquivo}", ""),
+                key=f"email_assunto_view_{sufixo_arquivo}"
+            )
+            st.text_area(
+                "Corpo do e-mail para copiar e colar",
+                value=st.session_state.get(f"email_corpo_{sufixo_arquivo}", ""),
+                height=420,
+                key=f"email_corpo_view_{sufixo_arquivo}"
+            )
+            st.download_button(
                 label="⬇️ Baixar versão HTML do relatório",
                 data=st.session_state.get(f"email_html_{sufixo_arquivo}", ""),
                 file_name=f"relatorio_reprovadas_{sufixo_arquivo}.html",
@@ -1591,7 +1819,7 @@ def main():
     if "id_cliente_selecionado" not in st.session_state:
         st.session_state["id_cliente_selecionado"] = None
 
-    tab_auditoria, tab_evidencias, tab_agrupamento = st.tabs(["💻 Realizar Auditoria", "📸 Anexar Evidências (Apenas Reprovadas)", "📊 Reprovadas por Cliente"])
+    tab_auditoria, tab_evidencias, tab_agrupamento, tab_importacao = st.tabs(["💻 Realizar Auditoria", "📸 Anexar Evidências (Apenas Reprovadas)", "📊 Reprovadas por Cliente", "📥 Importar Base GOV"])
 
     # =========================================================================
     # ABA 1: REALIZAR AUDITORIA
@@ -2173,6 +2401,14 @@ def main():
                     file_name=st.session_state.get("pdf_nome_arquivo", "auditoria.pdf"),
                     mime="application/pdf"
                 )
+
+
+    # =========================================================================
+    # ABA 4: IMPORTAÇÃO DA BASE GOV
+    # =========================================================================
+    with tab_importacao:
+        exibir_importacao_base_gov()
+
 
 if __name__ == "__main__":
     main()

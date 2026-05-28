@@ -61,11 +61,6 @@ APP_PASSWORD = str(st.secrets.get("APP_PASSWORD", os.getenv("APP_PASSWORD", "cam
 def tela_login():
     """Bloqueia o acesso ao sistema até o usuário autenticar."""
     if st.session_state.get("autenticado"):
-        with st.sidebar:
-            st.success(f"Logado: {st.session_state.get('usuario_logado', '')}")
-            if st.button("Sair", key="btn_logout"):
-                st.session_state.clear()
-                st.rerun()
         return True
 
     st.title("🔐 Acesso restrito")

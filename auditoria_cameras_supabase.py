@@ -48,11 +48,11 @@ SUPABASE_BUCKET = st.secrets.get("SUPABASE_BUCKET", os.getenv("SUPABASE_BUCKET",
 
 # ── Login simples do app ────────────────────────────────────────────────────
 # Para publicar com segurança, você pode colocar estes valores no Streamlit Secrets:
-# APP_USERS = "fernando,natanael,cristina"
+# APP_USERS = "Fernando,Natanael,Cristina"
 # APP_PASSWORD = "sua-senha"
 APP_USERS = [
     u.strip().lower()
-    for u in str(st.secrets.get("APP_USERS", os.getenv("APP_USERS", "fernando,natanael,cristina"))).split(",")
+    for u in str(st.secrets.get("APP_USERS", os.getenv("APP_USERS", "Fernando,Natanael,Cristina"))).split(",")
     if u.strip()
 ]
 APP_PASSWORD = str(st.secrets.get("APP_PASSWORD", os.getenv("APP_PASSWORD", "camerite@123")))

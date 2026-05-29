@@ -278,38 +278,72 @@ def salvar_ou_atualizar_auditoria(dados):
     conn.commit()
     cursor.close()
     conn.close()
+    try:
+        carregar_todos_registros.clear()
+    except Exception:
+        pass
 
-def listar_evidencias(id_camera):
-    conn = get_db_conn()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cursor.execute("""
-        SELECT
-            id AS "ID",
-            id_da_camera AS "ID_da_Camera",
-            caminho_evidencia AS "Caminho_Evidencia",
-            caminho_thumbnail AS "Caminho_Thumbnail",
-            data_upload AS "Data_Upload",
-            observacao AS "Observacao"
-        FROM tbl_evidencias
-        WHERE id_da_camera = %s
-        ORDER BY id ASC
-    """, (str(id_camera),))
-    registros = [dict(row) for row in cursor.fetchall()]
-    cursor.close()
-    conn.close()
-    return registros
-
-def contar_evidencias(id_camera):
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_todas_evidencias():
+    """Carrega todas as evidências uma única vez para evitar centenas de consultas ao Supabase."""
     try:
         conn = get_db_conn()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM tbl_evidencias WHERE id_da_camera = %s", (str(id_camera),))
-        total = cursor.fetchone()[0]
-        cursor.close()
+        df = pd.read_sql_query("""
+            SELECT
+                id AS "ID",
+                id_da_camera AS "ID_da_Camera",
+                caminho_evidencia AS "Caminho_Evidencia",
+                caminho_thumbnail AS "Caminho_Thumbnail",
+                data_upload AS "Data_Upload",
+                observacao AS "Observacao"
+            FROM tbl_evidencias
+            ORDER BY id ASC
+        """, conn)
         conn.close()
-        return int(total)
     except Exception:
-        return 0
+        return pd.DataFrame(columns=[
+            "ID", "ID_da_Camera", "Caminho_Evidencia",
+            "Caminho_Thumbnail", "Data_Upload", "Observacao"
+        ])
+
+    df = garantir_colunas_dataframe(df, [
+        "ID", "ID_da_Camera", "Caminho_Evidencia",
+        "Caminho_Thumbnail", "Data_Upload", "Observacao"
+    ])
+    df["ID_da_Camera"] = df["ID_da_Camera"].astype(str).str.strip()
+    return df
+
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_contagem_evidencias():
+    """Retorna a quantidade de evidências por câmera sem consultar o banco em cada linha."""
+    df = carregar_todas_evidencias()
+    if df.empty:
+        return {}
+
+    df_validas = df.copy()
+    df_validas["Caminho_Evidencia"] = df_validas["Caminho_Evidencia"].fillna("").astype(str).str.strip()
+    df_validas = df_validas[df_validas["Caminho_Evidencia"] != ""]
+    return df_validas.groupby("ID_da_Camera").size().astype(int).to_dict()
+
+def limpar_cache_evidencias():
+    """Limpa caches relacionados às evidências após upload, remoção ou sincronização."""
+    try:
+        carregar_todas_evidencias.clear()
+        carregar_contagem_evidencias.clear()
+    except Exception:
+        pass
+
+def listar_evidencias(id_camera):
+    """Lista evidências da câmera usando cache em memória, evitando nova conexão ao Supabase."""
+    id_camera = str(id_camera).strip()
+    df = carregar_todas_evidencias()
+    if df.empty:
+        return []
+    return df[df["ID_da_Camera"].astype(str).str.strip() == id_camera].to_dict("records")
+
+def contar_evidencias(id_camera):
+    """Conta evidências usando cache em memória."""
+    return int(carregar_contagem_evidencias().get(str(id_camera).strip(), 0))
 
 def sincronizar_evidencia_principal(id_camera):
     """Mantém compatibilidade com relatórios antigos usando a primeira evidência como principal."""
@@ -346,6 +380,7 @@ def adicionar_evidencia(id_camera, caminho_foto, caminho_thumbnail="", observaca
     conn.commit()
     cursor.close()
     conn.close()
+    limpar_cache_evidencias()
     sincronizar_evidencia_principal(id_camera)
 
 def atualizar_apenas_evidencia(id_camera, caminho_foto, caminho_thumbnail=""):
@@ -378,6 +413,7 @@ def remover_evidencia_unica(id_evidencia):
     conn.commit()
     cursor.close()
     conn.close()
+    limpar_cache_evidencias()
     sincronizar_evidencia_principal(dados["ID_da_Camera"])
     return dados
 
@@ -394,6 +430,7 @@ def remover_evidencia(id_camera):
     conn.commit()
     cursor.close()
     conn.close()
+    limpar_cache_evidencias()
     return evidencias
 
 def migrar_evidencia_antiga_para_galeria(id_camera, caminho_foto, caminho_thumbnail=""):
@@ -536,6 +573,7 @@ def obter_thumbnail(row_data):
 
     return ""
 
+@st.cache_data(ttl=60, show_spinner=False)
 def carregar_todos_registros():
     conn = get_db_conn()
     df = pd.read_sql_query("""
@@ -571,7 +609,11 @@ def carregar_todos_registros():
 
     return df
 
-inicializar_db()
+@st.cache_resource(show_spinner=False)
+def inicializar_db_cacheado():
+    inicializar_db()
+
+inicializar_db_cacheado()
 
 
 # ── Importação da base GOV para o Supabase ──────────────────────────────────
@@ -1170,19 +1212,15 @@ def preparar_df_reprovadas_agrupado(df_registros):
 
 
 def contar_evidencias_camera(row):
-    id_camera = row.get("ID_da_Camera", "")
-    evidencias = listar_evidencias(id_camera)
-    qtd = 0
-    for ev in evidencias:
-        caminho = str(ev.get("Caminho_Evidencia", "")).strip()
-        if caminho and caminho_existe(caminho):
-            qtd += 1
+    """Conta evidências sem abrir conexão por linha. Mantém fallback para caminho antigo."""
+    id_camera = str(row.get("ID_da_Camera", "")).strip()
+    qtd = contar_evidencias(id_camera)
 
     if qtd == 0:
         caminho_antigo = str(row.get("Caminho_Evidencia", "")).strip() if pd.notna(row.get("Caminho_Evidencia", "")) else ""
         if caminho_antigo and caminho_existe(caminho_antigo):
             qtd = 1
-    return qtd
+    return int(qtd)
 
 
 def gerar_excel_reprovadas_agrupadas(df_registros):

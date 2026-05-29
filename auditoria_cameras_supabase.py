@@ -2710,7 +2710,7 @@ def main():
         total_aprovadas = (df_sidebar["Resultado_Geral"] == "APROVADA").sum() if total_registros > 0 else 0
         total_reprovadas = (df_sidebar["Resultado_Geral"] == "REPROVADA").sum() if total_registros > 0 else 0
 
-        st.metric("Total no Banco SQL", total_registros)
+        st.metric("Total de Câmeras Auditadas", total_registros)
         st.metric("🟢 Câmeras Aprovadas", total_aprovadas)
         st.metric("❌ Câmeras Reprovadas", total_reprovadas)
 

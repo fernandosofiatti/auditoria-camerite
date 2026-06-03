@@ -212,21 +212,69 @@ def aplicar_estilo_profissional():
     st.markdown("""
     <style>
         .block-container { padding-top: 0.6rem; }
-        div[data-testid="stMetric"] {
-            background: #ffffff;
-            border: 1px solid #e8edf3;
-            padding: 14px 16px;
-            border-radius: 16px;
-            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+        .kpi-card {
+            min-height: 112px;
+            border-radius: 20px;
+            padding: 18px 18px 16px 18px;
+            color: #ffffff;
+            box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);
+            border: 1px solid rgba(255,255,255,0.20);
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 12px;
         }
-        div[data-testid="stMetric"] label {
-            color: #64748b;
-            font-weight: 700;
+        .kpi-card:after {
+            content: "";
+            position: absolute;
+            right: -34px;
+            top: -34px;
+            width: 112px;
+            height: 112px;
+            background: rgba(255,255,255,0.16);
+            border-radius: 999px;
         }
-        div[data-testid="stMetric"] [data-testid="stMetricValue"] {
-            color: #0f172a;
+        .kpi-icon {
+            font-size: 1.35rem;
+            line-height: 1;
+            margin-bottom: 10px;
+            opacity: 0.98;
+        }
+        .kpi-value {
+            font-size: 2.05rem;
+            line-height: 1.05;
+            font-weight: 900;
+            letter-spacing: -0.04em;
+            margin-bottom: 4px;
+            position: relative;
+            z-index: 2;
+        }
+        .kpi-label {
+            font-size: 0.88rem;
             font-weight: 800;
+            opacity: 0.95;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            position: relative;
+            z-index: 2;
         }
+        .kpi-extra {
+            margin-top: 7px;
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.18);
+            font-size: 0.78rem;
+            font-weight: 800;
+            position: relative;
+            z-index: 2;
+        }
+        .kpi-blue { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
+        .kpi-indigo { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); }
+        .kpi-green { background: linear-gradient(135deg, #16a34a 0%, #166534 100%); }
+        .kpi-red { background: linear-gradient(135deg, #ef4444 0%, #991b1b 100%); }
+        .kpi-orange { background: linear-gradient(135deg, #f97316 0%, #c2410c 100%); }
+        .kpi-purple { background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); }
+        .kpi-slate { background: linear-gradient(135deg, #475569 0%, #1e293b 100%); }
         .top-bar {
             display: flex;
             align-items: center;
@@ -337,10 +385,24 @@ def calcular_indicadores_dashboard(cameras_df, df_salvos, id_cliente=None):
 
 
 def exibir_metricas_em_linha(metricas):
+    """Exibe KPIs em cards coloridos, com visual de dashboard executivo."""
     cols = st.columns(len(metricas))
     for col, item in zip(cols, metricas):
-        label, valor, delta = item if len(item) == 3 else (item[0], item[1], None)
-        col.metric(label, formatar_numero(valor), delta=delta)
+        label = item.get("label", "") if isinstance(item, dict) else item[0]
+        valor = item.get("valor", 0) if isinstance(item, dict) else item[1]
+        icone = item.get("icone", "📊") if isinstance(item, dict) else "📊"
+        cor = item.get("cor", "blue") if isinstance(item, dict) else "blue"
+        extra = item.get("extra", "") if isinstance(item, dict) else ""
+        extra_html = f'<div class="kpi-extra">{escape(str(extra))}</div>' if str(extra).strip() else ""
+        html_card = f"""
+            <div class="kpi-card kpi-{escape(str(cor))}">
+                <div class="kpi-icon">{escape(str(icone))}</div>
+                <div class="kpi-value">{escape(formatar_numero(valor))}</div>
+                <div class="kpi-label">{escape(str(label))}</div>
+                {extra_html}
+            </div>
+        """
+        col.markdown(html_card, unsafe_allow_html=True)
 
 
 def obter_nome_cliente(cameras_df, id_cliente):
@@ -382,28 +444,34 @@ def exibir_home_executiva(cameras_df, df_salvos):
         unsafe_allow_html=True,
     )
 
-    st.subheader("Operação")
+    total = max(indicadores["total_cameras"], 1)
+    pct_online = round(indicadores["online"] / total * 100, 1) if indicadores["total_cameras"] else 0
+    pct_offline = round(indicadores["offline"] / total * 100, 1) if indicadores["total_cameras"] else 0
+    pct_auditadas = round(indicadores["auditadas"] / total * 100, 1) if indicadores["total_cameras"] else 0
+    pct_pendentes = round(indicadores["pendentes"] / total * 100, 1) if indicadores["total_cameras"] else 0
+
+    st.markdown("### Operação")
     exibir_metricas_em_linha([
-        ("Clientes", indicadores["clientes"], None),
-        ("Câmeras", indicadores["total_cameras"], None),
-        ("Online", indicadores["online"], None),
-        ("Offline", indicadores["offline"], None),
+        {"label": "Clientes", "valor": indicadores["clientes"], "icone": "👥", "cor": "blue"},
+        {"label": "Câmeras", "valor": indicadores["total_cameras"], "icone": "📷", "cor": "indigo"},
+        {"label": "Online", "valor": indicadores["online"], "icone": "🟢", "cor": "green", "extra": f"{pct_online}% da base"},
+        {"label": "Offline", "valor": indicadores["offline"], "icone": "🔴", "cor": "red", "extra": f"{pct_offline}% da base"},
     ])
 
-    st.subheader("Auditoria")
+    st.markdown("### Auditoria")
     exibir_metricas_em_linha([
-        ("Auditadas", indicadores["auditadas"], None),
-        ("Pendentes", indicadores["pendentes"], None),
-        ("Aprovadas", indicadores["aprovadas"], None),
-        ("Reprovadas", indicadores["reprovadas"], None),
+        {"label": "Auditadas", "valor": indicadores["auditadas"], "icone": "✅", "cor": "green", "extra": f"{pct_auditadas}% da base"},
+        {"label": "Pendentes", "valor": indicadores["pendentes"], "icone": "⏳", "cor": "orange", "extra": f"{pct_pendentes}% da base"},
+        {"label": "Aprovadas", "valor": indicadores["aprovadas"], "icone": "✔️", "cor": "blue"},
+        {"label": "Reprovadas", "valor": indicadores["reprovadas"], "icone": "🚨", "cor": "red"},
     ])
 
-    st.subheader("LPR")
+    st.markdown("### LPR")
     exibir_metricas_em_linha([
-        ("LPRs", indicadores["lprs"], None),
-        ("LPR Offline", indicadores["lpr_offline"], None),
-        ("LPR Auditadas", indicadores["lpr_auditadas"], None),
-        ("LPR Reprovadas", indicadores["lpr_reprovadas"], None),
+        {"label": "LPRs", "valor": indicadores["lprs"], "icone": "📡", "cor": "purple"},
+        {"label": "LPR Offline", "valor": indicadores["lpr_offline"], "icone": "🔴", "cor": "red"},
+        {"label": "LPR Auditadas", "valor": indicadores["lpr_auditadas"], "icone": "✅", "cor": "green"},
+        {"label": "LPR Reprovadas", "valor": indicadores["lpr_reprovadas"], "icone": "🚨", "cor": "orange"},
     ])
 
     st.divider()

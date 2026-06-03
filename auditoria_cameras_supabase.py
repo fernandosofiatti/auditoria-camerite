@@ -317,47 +317,55 @@ def aplicar_estilo_profissional():
             box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
         }
 
-        /* Correção: não deixar o CSS dos cards afetar botões/abas do Streamlit */
-        .stButton > button,
-        .stDownloadButton > button,
-        div[data-testid="stBaseButton-secondary"],
-        div[data-testid="stBaseButton-primary"] {
-            color: inherit !important;
-        }
-
-        .stButton > button p,
-        .stDownloadButton > button p,
-        button p,
-        [data-testid="stMarkdownContainer"] p {
-            color: inherit;
-        }
-
-        /* Abas do Streamlit: força texto visível no menu superior */
+        /* Correção forte: garante textos visíveis nos botões/abas do Streamlit */
+        div[data-testid="stTabs"] button,
+        div[data-testid="stTabs"] button *,
         button[role="tab"],
-        button[role="tab"] p,
-        button[role="tab"] span {
+        button[role="tab"] *,
+        .stButton > button,
+        .stButton > button *,
+        .stDownloadButton > button,
+        .stDownloadButton > button * {
+            opacity: 1 !important;
+            visibility: visible !important;
+            -webkit-text-fill-color: #0f172a !important;
             color: #0f172a !important;
-            font-weight: 700 !important;
         }
 
+        div[data-testid="stTabs"] button[aria-selected="true"],
+        div[data-testid="stTabs"] button[aria-selected="true"] *,
         button[role="tab"][aria-selected="true"],
-        button[role="tab"][aria-selected="true"] p,
-        button[role="tab"][aria-selected="true"] span {
+        button[role="tab"][aria-selected="true"] * {
+            -webkit-text-fill-color: #dc2626 !important;
             color: #dc2626 !important;
             font-weight: 800 !important;
         }
 
-        /* Botões secundários ficam legíveis */
-        .stButton > button[kind="secondary"],
-        .stDownloadButton > button[kind="secondary"] {
-            background: #ffffff !important;
-            color: #0f172a !important;
-            border: 1px solid #cbd5e1 !important;
+        /* Mantém botão primário com texto branco, mas somente quando for realmente primário */
+        .stButton > button[kind="primary"],
+        .stButton > button[kind="primary"] *,
+        .stDownloadButton > button[kind="primary"],
+        .stDownloadButton > button[kind="primary"] * {
+            -webkit-text-fill-color: #ffffff !important;
+            color: #ffffff !important;
         }
 
-        .stButton > button[kind="secondary"] p,
-        .stDownloadButton > button[kind="secondary"] p {
+        /* Botões secundários/menus ficam com fundo branco e texto escuro */
+        .stButton > button[kind="secondary"],
+        .stButton > button[kind="secondary"] *,
+        .stDownloadButton > button[kind="secondary"],
+        .stDownloadButton > button[kind="secondary"] * {
+            -webkit-text-fill-color: #0f172a !important;
             color: #0f172a !important;
+        }
+
+        /* Links/labels dentro da barra de abas também ficam legíveis */
+        div[data-testid="stTabs"] p,
+        div[data-testid="stTabs"] span,
+        div[data-testid="stTabs"] a {
+            -webkit-text-fill-color: #0f172a !important;
+            color: #0f172a !important;
+            opacity: 1 !important;
         }
     </style>
     """, unsafe_allow_html=True)

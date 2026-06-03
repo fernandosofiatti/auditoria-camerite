@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import hmac
 import uuid
 from datetime import datetime
 from io import BytesIO
@@ -46,39 +45,6 @@ SUPABASE_KEY = (
     or st.secrets.get("SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY", ""))
 )
 SUPABASE_BUCKET = st.secrets.get("SUPABASE_BUCKET", os.getenv("SUPABASE_BUCKET", "evidencias"))
-
-# ── Login simples do app ────────────────────────────────────────────────────
-APP_USERS = [
-    u.strip().lower()
-    for u in str(st.secrets.get("APP_USERS", os.getenv("APP_USERS", "fernando,natanael,cristina"))).split(",")
-    if u.strip()
-]
-APP_PASSWORD = str(st.secrets.get("APP_PASSWORD", os.getenv("APP_PASSWORD", "camerite@123")))
-
-def tela_login():
-    """Bloqueia o acesso ao sistema até o usuário autenticar."""
-    if st.session_state.get("autenticado"):
-        return True
-
-    st.title("🔐 Acesso restrito")
-    st.caption("Entre com seu usuário e senha para acessar a Central de Auditoria de Câmeras.")
-
-    with st.form("form_login"):
-        usuario = st.text_input("Usuário").strip().lower()
-        senha = st.text_input("Senha", type="password")
-        entrar = st.form_submit_button("Entrar", type="primary")
-
-    if entrar:
-        usuario_ok = usuario in APP_USERS
-        senha_ok = hmac.compare_digest(senha, APP_PASSWORD)
-        if usuario_ok and senha_ok:
-            st.session_state["autenticado"] = True
-            st.session_state["usuario_logado"] = usuario
-            st.rerun()
-        else:
-            st.error("Usuário ou senha inválidos.")
-
-    st.stop()
 
 # Fallback local apenas para testes no seu computador.
 PASTA_EVIDENCIAS = os.path.join(BASE_DIR, "Evidencias")
@@ -729,6 +695,23 @@ def importar_cameras_origem_supabase(df_importacao):
             data_importacao = NOW()
     """
     psycopg2.extras.execute_values(cursor, insert_sql, registros, page_size=1000)
+
+    # Sincroniza também as auditorias já gravadas.
+    # Antes, a importação atualizava a tabela cameras_origem, mas quem já tinha sido auditado
+    # continuava com nome/status/plano antigos em tbl_auditoria até ser salvo manualmente de novo.
+    cursor.execute("""
+        UPDATE tbl_auditoria AS a
+        SET
+            id_whitelabel = COALESCE(NULLIF(c.id_whitelabel, ''), a.id_whitelabel),
+            franqueado = COALESCE(NULLIF(c.nome_empresa, ''), a.franqueado),
+            nome_da_camera = COALESCE(NULLIF(c.nome_da_camera, ''), a.nome_da_camera),
+            status_da_camera = COALESCE(NULLIF(c.status_da_camera, ''), a.status_da_camera),
+            plano_contratado = COALESCE(NULLIF(c.plano_contratado, ''), a.plano_contratado)
+        FROM cameras_origem AS c
+        WHERE a.id_da_camera = c.id_da_camera
+    """)
+    auditorias_sincronizadas = cursor.rowcount
+
     cursor.execute("SELECT COUNT(*) FROM cameras_origem")
     depois = int(cursor.fetchone()[0])
     conn.commit()
@@ -739,7 +722,15 @@ def importar_cameras_origem_supabase(df_importacao):
     atualizadas = max(len(df_importacao) - novas, 0)
     carregar_cameras_origem_db.clear()
     carregar_arquivos_origem.clear()
-    return {"total_csv": len(df_importacao), "antes": antes, "depois": depois, "novas": novas, "atualizadas": atualizadas}
+    carregar_todos_registros.clear()
+    return {
+        "total_csv": len(df_importacao),
+        "antes": antes,
+        "depois": depois,
+        "novas": novas,
+        "atualizadas": atualizadas,
+        "auditorias_sincronizadas": auditorias_sincronizadas,
+    }
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -828,7 +819,8 @@ def exibir_importacao_base_gov():
             c2.metric("Novas câmeras", resumo["novas"])
             c3.metric("Atualizadas", resumo["atualizadas"])
             c4.metric("Total no banco", resumo["depois"])
-            st.info("A base foi atualizada. Troque de aba ou recarregue a página para navegar com a base nova.")
+            st.metric("Auditorias sincronizadas", resumo.get("auditorias_sincronizadas", 0))
+            st.info("A base foi atualizada e os nomes/status das câmeras já auditadas também foram sincronizados.")
         except Exception as e:
             st.error(f"Erro ao importar para o Supabase: {e}")
 
@@ -860,22 +852,27 @@ def carregar_arquivos_origem():
 
         meus_ids = set(clientes_df["ID_Whitelabel"].astype(str).str.strip())
 
-        # O CSV padrão GOV enviado é separado por ponto e vírgula (;).
-        # Usar sep=None pode falhar ou interpretar errado em alguns ambientes.
-        try:
-            cameras_df = pd.read_csv(
-                CAMERAS_CSV,
-                encoding="utf-8-sig",
-                sep=";",
-                dtype={"ID_Whitelabel": str, "ID_da_Camera": str}
-            )
-        except Exception:
-            cameras_df = pd.read_csv(
-                CAMERAS_CSV,
-                encoding="latin1",
-                sep=";",
-                dtype={"ID_Whitelabel": str, "ID_da_Camera": str}
-            )
+        # Primeiro tenta usar a base importada no Supabase.
+        # Se ainda não existir base importada, usa o CSV local como fallback.
+        cameras_df = carregar_cameras_origem_db()
+
+        if cameras_df is None or cameras_df.empty:
+            # O CSV padrão GOV enviado é separado por ponto e vírgula (;).
+            # Usar sep=None pode falhar ou interpretar errado em alguns ambientes.
+            try:
+                cameras_df = pd.read_csv(
+                    CAMERAS_CSV,
+                    encoding="utf-8-sig",
+                    sep=";",
+                    dtype={"ID_Whitelabel": str, "ID_da_Camera": str}
+                )
+            except Exception:
+                cameras_df = pd.read_csv(
+                    CAMERAS_CSV,
+                    encoding="latin1",
+                    sep=";",
+                    dtype={"ID_Whitelabel": str, "ID_da_Camera": str}
+                )
 
         cameras_df.columns = [str(c).replace("\ufeff", "").strip() for c in cameras_df.columns]
 
@@ -2165,8 +2162,6 @@ def exibir_auditoria_lpr(cameras_df, df_salvos, id_cliente_selecionado=None):
 
 # ── Interface Principal ──────────────────────────────────────────────────────
 def main():
-    tela_login()
-
     st.title("📷 Central de Auditoria de Câmeras")
 
     cameras_df, erro = carregar_arquivos_origem()

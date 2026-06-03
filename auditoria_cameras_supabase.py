@@ -211,7 +211,7 @@ def aplicar_estilo_profissional():
     """Aplica um visual mais limpo e corporativo sem depender de bibliotecas externas."""
     st.markdown("""
     <style>
-        .block-container { padding-top: 1.4rem; }
+        .block-container { padding-top: 0.6rem; }
         div[data-testid="stMetric"] {
             background: #ffffff;
             border: 1px solid #e8edf3;
@@ -227,32 +227,39 @@ def aplicar_estilo_profissional():
             color: #0f172a;
             font-weight: 800;
         }
-        .app-hero {
-            padding: 20px 24px;
-            border-radius: 20px;
-            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #0369a1 100%);
-            color: white;
-            margin-bottom: 18px;
-            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.18);
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 14px;
+            background: #ffffff;
+            border: 1px solid #e8edf3;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            margin: 4px 0 12px 0;
         }
-        .app-hero h1 {
-            margin: 0;
-            color: white;
-            font-size: 2.0rem;
+        .top-bar-title {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.2;
         }
-        .app-hero p {
-            margin: 6px 0 0 0;
-            color: #dbeafe;
+        .top-bar-subtitle {
+            font-size: 0.82rem;
+            color: #64748b;
+            margin-top: 2px;
         }
         .filter-pill {
             display: inline-block;
-            padding: 8px 12px;
+            padding: 6px 10px;
             border-radius: 999px;
             background: #eff6ff;
             border: 1px solid #bfdbfe;
             color: #1e3a8a;
+            font-size: 0.85rem;
             font-weight: 700;
-            margin-bottom: 12px;
+            white-space: nowrap;
         }
         .section-card {
             border: 1px solid #e8edf3;
@@ -352,24 +359,28 @@ def exibir_home_executiva(cameras_df, df_salvos):
     indicadores = calcular_indicadores_dashboard(cameras_df, df_salvos, id_cliente)
     ultima = obter_ultima_importacao()
 
-    st.markdown("""
-    <div class="app-hero">
-        <h1>📷 Central de Auditoria de Câmeras</h1>
-        <p>Dashboard executivo com indicadores baseados na carteira filtrada.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown(f"<span class='filter-pill'>📍 Visualizando: {escape(str(nome_filtro))}</span>", unsafe_allow_html=True)
-
     if ultima:
-        st.caption(
-            f"Última atualização da base: **{ultima.get('data_importacao_formatada', '-')}** · "
-            f"Novas: **{formatar_numero(ultima.get('novas', 0))}** · "
-            f"Atualizadas: **{formatar_numero(ultima.get('atualizadas', 0))}** · "
-            f"Auditorias sincronizadas: **{formatar_numero(ultima.get('auditorias_sincronizadas', 0))}**"
+        info_atualizacao = (
+            f"🕒 Última atualização: {escape(str(ultima.get('data_importacao_formatada', '-')))} · "
+            f"Novas: {formatar_numero(ultima.get('novas', 0))} · "
+            f"Atualizadas: {formatar_numero(ultima.get('atualizadas', 0))} · "
+            f"Auditorias sincronizadas: {formatar_numero(ultima.get('auditorias_sincronizadas', 0))}"
         )
     else:
-        st.caption("Última atualização da base: ainda não registrada pelo novo histórico.")
+        info_atualizacao = "🕒 Última atualização: ainda não registrada pelo novo histórico."
+
+    st.markdown(
+        f"""
+        <div class="top-bar">
+            <div>
+                <div class="top-bar-title">📷 Central de Auditoria de Câmeras</div>
+                <div class="top-bar-subtitle">{info_atualizacao}</div>
+            </div>
+            <span class="filter-pill">📍 Visualizando: {escape(str(nome_filtro))}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.subheader("Operação")
     exibir_metricas_em_linha([

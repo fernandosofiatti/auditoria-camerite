@@ -158,6 +158,21 @@ def inicializar_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cameras_origem_id_camera ON cameras_origem (id_da_camera)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cameras_origem_whitelabel ON cameras_origem (id_whitelabel)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cameras_origem_status ON cameras_origem (status_da_camera)")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS historico_importacao_base (
+            id BIGSERIAL PRIMARY KEY,
+            data_importacao TIMESTAMP DEFAULT NOW(),
+            total_csv INTEGER DEFAULT 0,
+            antes INTEGER DEFAULT 0,
+            depois INTEGER DEFAULT 0,
+            novas INTEGER DEFAULT 0,
+            atualizadas INTEGER DEFAULT 0,
+            auditorias_sincronizadas INTEGER DEFAULT 0,
+            observacao TEXT
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_importacao_data ON historico_importacao_base (data_importacao DESC)")
     conn.commit()
     cursor.close()
     conn.close()
@@ -189,6 +204,238 @@ def obter_coluna_existente(df, opcoes):
 
     return None
 
+
+
+
+def aplicar_estilo_profissional():
+    """Aplica um visual mais limpo e corporativo sem depender de bibliotecas externas."""
+    st.markdown("""
+    <style>
+        .block-container { padding-top: 1.4rem; }
+        div[data-testid="stMetric"] {
+            background: #ffffff;
+            border: 1px solid #e8edf3;
+            padding: 14px 16px;
+            border-radius: 16px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+        }
+        div[data-testid="stMetric"] label {
+            color: #64748b;
+            font-weight: 700;
+        }
+        div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+            color: #0f172a;
+            font-weight: 800;
+        }
+        .app-hero {
+            padding: 20px 24px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #0369a1 100%);
+            color: white;
+            margin-bottom: 18px;
+            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.18);
+        }
+        .app-hero h1 {
+            margin: 0;
+            color: white;
+            font-size: 2.0rem;
+        }
+        .app-hero p {
+            margin: 6px 0 0 0;
+            color: #dbeafe;
+        }
+        .filter-pill {
+            display: inline-block;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e3a8a;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .section-card {
+            border: 1px solid #e8edf3;
+            border-radius: 16px;
+            padding: 16px;
+            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+def formatar_numero(valor):
+    try:
+        return f"{int(valor):,}".replace(",", ".")
+    except Exception:
+        return str(valor)
+
+
+def filtrar_por_cliente(df, id_cliente):
+    if df is None or df.empty or not id_cliente:
+        return df.copy() if df is not None else pd.DataFrame()
+    if "ID_Whitelabel" not in df.columns:
+        return df.copy()
+    return df[df["ID_Whitelabel"].astype(str).str.strip() == str(id_cliente).strip()].copy()
+
+
+def calcular_indicadores_dashboard(cameras_df, df_salvos, id_cliente=None):
+    df_base = filtrar_por_cliente(cameras_df, id_cliente)
+    df_aud = filtrar_por_cliente(df_salvos, id_cliente)
+
+    if df_base is None:
+        df_base = pd.DataFrame()
+    if df_aud is None:
+        df_aud = pd.DataFrame()
+
+    ids_base = set(df_base.get("ID_da_Camera", pd.Series(dtype=str)).astype(str).str.strip()) if not df_base.empty else set()
+    ids_auditadas = set(df_aud.get("ID_da_Camera", pd.Series(dtype=str)).astype(str).str.strip()) if not df_aud.empty else set()
+
+    total_cameras = len(df_base)
+    online = int((df_base.get("Status_da_Camera", pd.Series(dtype=str)).astype(str).str.upper() == "ONLINE").sum()) if total_cameras else 0
+    offline = int((df_base.get("Status_da_Camera", pd.Series(dtype=str)).astype(str).str.upper() == "OFFLINE").sum()) if total_cameras else 0
+    clientes = df_base.get("ID_Whitelabel", pd.Series(dtype=str)).astype(str).nunique() if total_cameras else 0
+
+    auditadas = len(ids_auditadas.intersection(ids_base)) if ids_base else len(ids_auditadas)
+    pendentes = max(total_cameras - auditadas, 0)
+    aprovadas = int((df_aud.get("Resultado_Geral", pd.Series(dtype=str)).astype(str) == "APROVADA").sum()) if not df_aud.empty else 0
+    reprovadas = int((df_aud.get("Resultado_Geral", pd.Series(dtype=str)).astype(str) == "REPROVADA").sum()) if not df_aud.empty else 0
+
+    nomes_base = df_base.get("Nome_da_Camera", pd.Series(dtype=str)).astype(str).str.upper() if not df_base.empty else pd.Series(dtype=str)
+    lpr_base = df_base[nomes_base.str.contains("LPR", na=False)].copy() if not df_base.empty else pd.DataFrame()
+    ids_lpr = set(lpr_base.get("ID_da_Camera", pd.Series(dtype=str)).astype(str).str.strip()) if not lpr_base.empty else set()
+
+    df_aud_lpr = df_aud[df_aud.get("ID_da_Camera", pd.Series(dtype=str)).astype(str).str.strip().isin(ids_lpr)].copy() if ids_lpr and not df_aud.empty else pd.DataFrame()
+    lpr_offline = int((lpr_base.get("Status_da_Camera", pd.Series(dtype=str)).astype(str).str.upper() == "OFFLINE").sum()) if not lpr_base.empty else 0
+    lpr_auditadas = len(set(df_aud_lpr.get("ID_da_Camera", pd.Series(dtype=str)).astype(str).str.strip())) if not df_aud_lpr.empty else 0
+    lpr_reprovadas = int((df_aud_lpr.get("Resultado_Geral", pd.Series(dtype=str)).astype(str) == "REPROVADA").sum()) if not df_aud_lpr.empty else 0
+
+    return {
+        "df_base": df_base,
+        "df_aud": df_aud,
+        "clientes": int(clientes),
+        "total_cameras": int(total_cameras),
+        "online": online,
+        "offline": offline,
+        "auditadas": int(auditadas),
+        "pendentes": int(pendentes),
+        "aprovadas": aprovadas,
+        "reprovadas": reprovadas,
+        "lprs": int(len(lpr_base)),
+        "lpr_offline": lpr_offline,
+        "lpr_auditadas": int(lpr_auditadas),
+        "lpr_reprovadas": lpr_reprovadas,
+    }
+
+
+def exibir_metricas_em_linha(metricas):
+    cols = st.columns(len(metricas))
+    for col, item in zip(cols, metricas):
+        label, valor, delta = item if len(item) == 3 else (item[0], item[1], None)
+        col.metric(label, formatar_numero(valor), delta=delta)
+
+
+def obter_nome_cliente(cameras_df, id_cliente):
+    if not id_cliente or cameras_df is None or cameras_df.empty:
+        return "Todos os Clientes"
+    df = cameras_df[cameras_df["ID_Whitelabel"].astype(str).str.strip() == str(id_cliente).strip()]
+    if df.empty:
+        return str(id_cliente)
+    nome = str(df.iloc[0].get("Franqueado", "")).strip()
+    return f"{id_cliente} - {nome}" if nome else str(id_cliente)
+
+
+def exibir_home_executiva(cameras_df, df_salvos):
+    id_cliente = st.session_state.get("id_cliente_selecionado")
+    nome_filtro = obter_nome_cliente(cameras_df, id_cliente)
+    indicadores = calcular_indicadores_dashboard(cameras_df, df_salvos, id_cliente)
+    ultima = obter_ultima_importacao()
+
+    st.markdown("""
+    <div class="app-hero">
+        <h1>📷 Central de Auditoria de Câmeras</h1>
+        <p>Dashboard executivo com indicadores baseados na carteira filtrada.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"<span class='filter-pill'>📍 Visualizando: {escape(str(nome_filtro))}</span>", unsafe_allow_html=True)
+
+    if ultima:
+        st.caption(
+            f"Última atualização da base: **{ultima.get('data_importacao_formatada', '-')}** · "
+            f"Novas: **{formatar_numero(ultima.get('novas', 0))}** · "
+            f"Atualizadas: **{formatar_numero(ultima.get('atualizadas', 0))}** · "
+            f"Auditorias sincronizadas: **{formatar_numero(ultima.get('auditorias_sincronizadas', 0))}**"
+        )
+    else:
+        st.caption("Última atualização da base: ainda não registrada pelo novo histórico.")
+
+    st.subheader("Operação")
+    exibir_metricas_em_linha([
+        ("Clientes", indicadores["clientes"], None),
+        ("Câmeras", indicadores["total_cameras"], None),
+        ("Online", indicadores["online"], None),
+        ("Offline", indicadores["offline"], None),
+    ])
+
+    st.subheader("Auditoria")
+    exibir_metricas_em_linha([
+        ("Auditadas", indicadores["auditadas"], None),
+        ("Pendentes", indicadores["pendentes"], None),
+        ("Aprovadas", indicadores["aprovadas"], None),
+        ("Reprovadas", indicadores["reprovadas"], None),
+    ])
+
+    st.subheader("LPR")
+    exibir_metricas_em_linha([
+        ("LPRs", indicadores["lprs"], None),
+        ("LPR Offline", indicadores["lpr_offline"], None),
+        ("LPR Auditadas", indicadores["lpr_auditadas"], None),
+        ("LPR Reprovadas", indicadores["lpr_reprovadas"], None),
+    ])
+
+    st.divider()
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        st.markdown("### 🚨 Clientes críticos")
+        df_base = indicadores["df_base"]
+        if df_base.empty:
+            st.info("Sem dados para calcular clientes críticos.")
+        else:
+            agrupado = df_base.groupby(["ID_Whitelabel", "Franqueado"], dropna=False).agg(
+                Cameras=("ID_da_Camera", "count"),
+                Offline=("Status_da_Camera", lambda s: int((s.astype(str).str.upper() == "OFFLINE").sum())),
+            ).reset_index()
+            agrupado["% Offline"] = (agrupado["Offline"] / agrupado["Cameras"] * 100).round(1)
+            criticos = agrupado.sort_values(["% Offline", "Offline"], ascending=False).head(10)
+            st.dataframe(criticos, hide_index=True, use_container_width=True)
+
+    with col_b:
+        st.markdown("### 🎯 Top 10 LPR Offline")
+        df_base = indicadores["df_base"]
+        if df_base.empty or "Nome_da_Camera" not in df_base.columns:
+            st.info("Sem LPRs offline para exibir.")
+        else:
+            df_lpr_off = df_base[
+                df_base["Nome_da_Camera"].astype(str).str.upper().str.contains("LPR", na=False)
+                & (df_base["Status_da_Camera"].astype(str).str.upper() == "OFFLINE")
+            ].copy()
+            if df_lpr_off.empty:
+                st.success("Nenhuma LPR offline na visão atual.")
+            else:
+                top_lpr = df_lpr_off.groupby("Franqueado").size().sort_values(ascending=False).head(10).reset_index(name="LPR Offline")
+                st.bar_chart(top_lpr.set_index("Franqueado"))
+                st.dataframe(top_lpr, hide_index=True, use_container_width=True)
+
+    st.divider()
+    st.markdown("### 📈 Histórico de importações")
+    df_hist = carregar_historico_importacoes(10)
+    if df_hist.empty:
+        st.info("Nenhuma importação registrada no histórico novo ainda.")
+    else:
+        st.dataframe(df_hist, hide_index=True, use_container_width=True)
 
 def salvar_ou_atualizar_auditoria(dados):
     conn = get_db_conn()
@@ -660,7 +907,7 @@ def preparar_csv_gov_para_importacao(arquivo_csv):
     return df
 
 
-def importar_cameras_origem_supabase(df_importacao):
+def importar_cameras_origem_supabase(df_importacao, progress_callback=None):
     """Insere novas câmeras e atualiza as existentes pelo id_da_camera, sem duplicar."""
     if df_importacao is None or df_importacao.empty:
         return {"total_csv": 0, "antes": 0, "depois": 0, "novas": 0, "atualizadas": 0}
@@ -694,11 +941,22 @@ def importar_cameras_origem_supabase(df_importacao):
             data_de_inativacao = EXCLUDED.data_de_inativacao,
             data_importacao = NOW()
     """
-    psycopg2.extras.execute_values(cursor, insert_sql, registros, page_size=1000)
+    total_registros = len(registros)
+    page_size = 1000
+    for inicio in range(0, total_registros, page_size):
+        fim = min(inicio + page_size, total_registros)
+        lote = registros[inicio:fim]
+        psycopg2.extras.execute_values(cursor, insert_sql, lote, page_size=page_size)
+        if progress_callback:
+            progresso = 35 + int((fim / max(total_registros, 1)) * 40)
+            progress_callback(min(progresso, 75), f"Importando registros {fim:,}/{total_registros:,}...".replace(",", "."))
 
     # Sincroniza também as auditorias já gravadas.
     # Antes, a importação atualizava a tabela cameras_origem, mas quem já tinha sido auditado
     # continuava com nome/status/plano antigos em tbl_auditoria até ser salvo manualmente de novo.
+    if progress_callback:
+        progress_callback(80, "Sincronizando auditorias já salvas...")
+
     cursor.execute("""
         UPDATE tbl_auditoria AS a
         SET
@@ -714,16 +972,10 @@ def importar_cameras_origem_supabase(df_importacao):
 
     cursor.execute("SELECT COUNT(*) FROM cameras_origem")
     depois = int(cursor.fetchone()[0])
-    conn.commit()
-    cursor.close()
-    conn.close()
 
     novas = max(depois - antes, 0)
     atualizadas = max(len(df_importacao) - novas, 0)
-    carregar_cameras_origem_db.clear()
-    carregar_arquivos_origem.clear()
-    carregar_todos_registros.clear()
-    return {
+    resumo = {
         "total_csv": len(df_importacao),
         "antes": antes,
         "depois": depois,
@@ -731,6 +983,17 @@ def importar_cameras_origem_supabase(df_importacao):
         "atualizadas": atualizadas,
         "auditorias_sincronizadas": auditorias_sincronizadas,
     }
+    registrar_historico_importacao(cursor, resumo)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    carregar_cameras_origem_db.clear()
+    carregar_arquivos_origem.clear()
+    carregar_todos_registros.clear()
+    carregar_historico_importacoes.clear()
+    return resumo
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -764,9 +1027,77 @@ def carregar_cameras_origem_db():
         return pd.DataFrame()
 
 
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def carregar_historico_importacoes(limite=20):
+    try:
+        conn = get_db_conn()
+        df = pd.read_sql_query("""
+            SELECT
+                TO_CHAR(data_importacao, 'DD/MM/YYYY HH24:MI') AS "Data",
+                total_csv AS "Processados",
+                novas AS "Novas",
+                atualizadas AS "Atualizadas",
+                auditorias_sincronizadas AS "Auditorias Sincronizadas",
+                depois AS "Total no Banco"
+            FROM historico_importacao_base
+            ORDER BY data_importacao DESC
+            LIMIT %s
+        """, conn, params=(int(limite),))
+        conn.close()
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
+def obter_ultima_importacao():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("""
+            SELECT
+                TO_CHAR(data_importacao, 'DD/MM/YYYY HH24:MI') AS data_importacao_formatada,
+                total_csv, antes, depois, novas, atualizadas, auditorias_sincronizadas
+            FROM historico_importacao_base
+            ORDER BY data_importacao DESC
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return dict(row) if row else None
+    except Exception:
+        return None
+
+
+def registrar_historico_importacao(cursor, resumo):
+    cursor.execute("""
+        INSERT INTO historico_importacao_base (
+            total_csv, antes, depois, novas, atualizadas, auditorias_sincronizadas, observacao
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (
+        int(resumo.get("total_csv", 0)),
+        int(resumo.get("antes", 0)),
+        int(resumo.get("depois", 0)),
+        int(resumo.get("novas", 0)),
+        int(resumo.get("atualizadas", 0)),
+        int(resumo.get("auditorias_sincronizadas", 0)),
+        "Importação realizada pelo app Streamlit",
+    ))
+
 def exibir_importacao_base_gov():
     st.subheader("📥 Importar Base GOV de Câmeras")
-    st.caption("Use esta aba para atualizar status, inserir novas câmeras e manter a base sem duplicar registros.")
+    st.caption("Atualiza a base mestre, sincroniza nomes/status nas auditorias e registra histórico da importação.")
+
+    ultima = obter_ultima_importacao()
+    if ultima:
+        st.info(
+            f"Última atualização: **{ultima.get('data_importacao_formatada', '-')}** · "
+            f"Novas: **{formatar_numero(ultima.get('novas', 0))}** · "
+            f"Atualizadas: **{formatar_numero(ultima.get('atualizadas', 0))}** · "
+            f"Auditorias sincronizadas: **{formatar_numero(ultima.get('auditorias_sincronizadas', 0))}**"
+        )
 
     with st.expander("Como funciona", expanded=False):
         st.markdown("""
@@ -774,7 +1105,7 @@ def exibir_importacao_base_gov():
         - Se a câmera já existir, o app **atualiza** status, nome, plano, empresa e demais campos.\n
         - Se for uma câmera nova, o app **insere**.\n
         - Registros não são duplicados.\n
-        - As auditorias já salvas em `tbl_auditoria` não são apagadas.
+        - As auditorias já salvas em `tbl_auditoria` não são apagadas; somente dados cadastrais da câmera são sincronizados.
         """)
 
     arquivo = st.file_uploader("Selecione o CSV GOV atualizado", type=["csv"], key="upload_csv_gov")
@@ -785,9 +1116,16 @@ def exibir_importacao_base_gov():
             st.warning("Nenhuma base GOV importada ainda. Faça a primeira importação para o app usar o banco no lugar do CSV local.")
         else:
             col1, col2, col3 = st.columns(3)
-            col1.metric("Câmeras no banco", len(df_atual))
-            col2.metric("Clientes", df_atual["ID_Whitelabel"].astype(str).nunique())
-            col3.metric("Offline", int((df_atual["Status_da_Camera"].astype(str).str.upper() == "OFFLINE").sum()))
+            col1.metric("Câmeras no banco", formatar_numero(len(df_atual)))
+            col2.metric("Clientes", formatar_numero(df_atual["ID_Whitelabel"].astype(str).nunique()))
+            col3.metric("Offline", formatar_numero(int((df_atual["Status_da_Camera"].astype(str).str.upper() == "OFFLINE").sum())))
+
+        st.markdown("### Histórico recente")
+        df_hist = carregar_historico_importacoes(10)
+        if df_hist.empty:
+            st.caption("Nenhuma importação registrada ainda.")
+        else:
+            st.dataframe(df_hist, hide_index=True, use_container_width=True)
         return
 
     try:
@@ -796,11 +1134,11 @@ def exibir_importacao_base_gov():
         st.error(f"Erro ao ler o CSV: {e}")
         return
 
-    st.success(f"CSV lido com sucesso: {len(df_preview)} câmeras únicas encontradas.")
+    st.success(f"CSV lido com sucesso: {formatar_numero(len(df_preview))} câmeras únicas encontradas.")
     col1, col2, col3 = st.columns(3)
-    col1.metric("Câmeras no CSV", len(df_preview))
-    col2.metric("Clientes no CSV", df_preview["id_whitelabel"].astype(str).nunique())
-    col3.metric("Offline no CSV", int((df_preview["status_da_camera"].astype(str).str.upper() == "OFFLINE").sum()))
+    col1.metric("Câmeras no CSV", formatar_numero(len(df_preview)))
+    col2.metric("Clientes no CSV", formatar_numero(df_preview["id_whitelabel"].astype(str).nunique()))
+    col3.metric("Offline no CSV", formatar_numero(int((df_preview["status_da_camera"].astype(str).str.upper() == "OFFLINE").sum())))
 
     st.dataframe(
         df_preview[["id_whitelabel", "nome_empresa", "id_da_camera", "nome_da_camera", "status_da_camera", "plano_contratado"]].head(100),
@@ -811,15 +1149,20 @@ def exibir_importacao_base_gov():
 
     if st.button("🚀 Importar / Atualizar base no Supabase", type="primary"):
         try:
-            with st.spinner("Importando base GOV para o Supabase..."):
-                resumo = importar_cameras_origem_supabase(df_preview)
+            progress = st.progress(0, text="Preparando importação...")
+            progress.progress(15, text="Validando CSV e preparando registros...")
+            progress.progress(35, text="Enviando registros para o Supabase...")
+            resumo = importar_cameras_origem_supabase(df_preview, progress_callback=lambda pct, msg: progress.progress(pct, text=msg))
+            progress.progress(85, text="Sincronizando auditorias e limpando cache...")
+            progress.progress(100, text="Importação concluída.")
+
             st.success("Importação concluída com sucesso.")
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Processados", resumo["total_csv"])
-            c2.metric("Novas câmeras", resumo["novas"])
-            c3.metric("Atualizadas", resumo["atualizadas"])
-            c4.metric("Total no banco", resumo["depois"])
-            st.metric("Auditorias sincronizadas", resumo.get("auditorias_sincronizadas", 0))
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("Processados", formatar_numero(resumo["total_csv"]))
+            c2.metric("Novas", formatar_numero(resumo["novas"]))
+            c3.metric("Atualizadas", formatar_numero(resumo["atualizadas"]))
+            c4.metric("Total no banco", formatar_numero(resumo["depois"]))
+            c5.metric("Auditorias sincronizadas", formatar_numero(resumo.get("auditorias_sincronizadas", 0)))
             st.info("A base foi atualizada e os nomes/status das câmeras já auditadas também foram sincronizados.")
         except Exception as e:
             st.error(f"Erro ao importar para o Supabase: {e}")
@@ -2162,7 +2505,7 @@ def exibir_auditoria_lpr(cameras_df, df_salvos, id_cliente_selecionado=None):
 
 # ── Interface Principal ──────────────────────────────────────────────────────
 def main():
-    st.title("📷 Central de Auditoria de Câmeras")
+    aplicar_estilo_profissional()
 
     cameras_df, erro = carregar_arquivos_origem()
     if erro:
@@ -2180,8 +2523,15 @@ def main():
     # evitando o loop de re-render infinito que causava o "carregando eternamente".
     if "id_cliente_selecionado" not in st.session_state:
         st.session_state["id_cliente_selecionado"] = None
+    id_cliente_selecionado = st.session_state.get("id_cliente_selecionado")
 
-    tab_auditoria, tab_evidencias, tab_agrupamento, tab_lpr, tab_importacao = st.tabs(["💻 Realizar Auditoria", "📸 Anexar Evidências (Apenas Reprovadas)", "📊 Reprovadas por Cliente", "🔎 Auditoria LPR", "📥 Importar Base GOV"])
+    tab_home, tab_auditoria, tab_evidencias, tab_agrupamento, tab_lpr, tab_importacao = st.tabs(["🏠 Dashboard", "💻 Realizar Auditoria", "📸 Anexar Evidências", "📊 Reprovadas por Cliente", "🔎 Auditoria LPR", "📥 Atualizar Base"])
+
+    # =========================================================================
+    # ABA 0: DASHBOARD EXECUTIVO
+    # =========================================================================
+    with tab_home:
+        exibir_home_executiva(cameras_df, df_salvos)
 
     # =========================================================================
     # ABA 1: REALIZAR AUDITORIA

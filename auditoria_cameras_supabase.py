@@ -28,6 +28,248 @@ except Exception:
 # ── Configuração da Página ──────────────────────────────────────────────────
 st.set_page_config(page_title="Auditoria de Câmeras", page_icon="📷", layout="wide")
 
+
+# ── Tema visual moderno (somente embelezamento) ─────────────────────────────
+def aplicar_tema_visual():
+    st.markdown("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        :root {
+            --bg-app: #f5f7fb;
+            --surface: #ffffff;
+            --surface-soft: #f8fafc;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-soft: #dbeafe;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --warning: #f59e0b;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --shadow-sm: 0 4px 16px rgba(15, 23, 42, .06);
+            --shadow-md: 0 12px 32px rgba(15, 23, 42, .10);
+            --radius: 18px;
+        }
+
+        html, body, [class*="css"] {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        .stApp {
+            background:
+                radial-gradient(circle at top left, rgba(37, 99, 235, .13), transparent 34%),
+                radial-gradient(circle at top right, rgba(14, 165, 233, .10), transparent 30%),
+                var(--bg-app);
+            color: var(--text-main);
+        }
+
+        .block-container {
+            padding-top: 1.6rem;
+            padding-bottom: 2rem;
+            max-width: 1480px;
+        }
+
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            border-right: 1px solid rgba(255,255,255,.08);
+        }
+
+        section[data-testid="stSidebar"] * {
+            color: #f8fafc !important;
+        }
+
+        section[data-testid="stSidebar"] [data-testid="stMetric"] {
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 16px;
+            padding: 14px 16px;
+            box-shadow: none;
+        }
+
+        section[data-testid="stSidebar"] div[data-testid="stButton"] > button,
+        section[data-testid="stSidebar"] div[data-testid="stDownloadButton"] > button {
+            background: rgba(255,255,255,.10) !important;
+            border: 1px solid rgba(255,255,255,.20) !important;
+            color: #ffffff !important;
+        }
+
+        .hero-auditoria {
+            padding: 28px 30px;
+            border-radius: 26px;
+            background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 52%, #38bdf8 100%);
+            color: white;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-auditoria:after {
+            content: "";
+            position: absolute;
+            width: 260px;
+            height: 260px;
+            right: -80px;
+            top: -100px;
+            background: rgba(255,255,255,.16);
+            border-radius: 999px;
+        }
+
+        .hero-auditoria h1 {
+            margin: 0;
+            font-size: clamp(1.9rem, 4vw, 3.2rem);
+            line-height: 1.05;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        .hero-auditoria p {
+            margin: 10px 0 0;
+            color: rgba(255,255,255,.82);
+            font-size: 1rem;
+            max-width: 760px;
+        }
+
+        div[data-testid="stTabs"] button[role="tab"] {
+            border-radius: 999px;
+            padding: 10px 18px;
+            margin-right: 6px;
+            font-weight: 700;
+            color: #334155;
+            background: rgba(255,255,255,.72);
+            border: 1px solid var(--border);
+        }
+
+        div[data-testid="stTabs"] button[aria-selected="true"] {
+            background: var(--primary) !important;
+            color: #ffffff !important;
+            border-color: var(--primary) !important;
+            box-shadow: 0 8px 20px rgba(37, 99, 235, .28);
+        }
+
+        div[data-testid="stMetric"],
+        div[data-testid="stExpander"],
+        div[data-testid="stForm"],
+        div[data-testid="stFileUploader"],
+        div[data-testid="stDataFrame"],
+        div[data-testid="stAlert"] {
+            border-radius: var(--radius) !important;
+        }
+
+        div[data-testid="stMetric"] {
+            background: rgba(255,255,255,.88);
+            border: 1px solid rgba(226, 232, 240, .95);
+            padding: 18px 20px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        div[data-testid="stMetric"] label,
+        div[data-testid="stMetric"] [data-testid="stMetricLabel"] {
+            color: var(--text-muted) !important;
+            font-weight: 700;
+        }
+
+        div[data-testid="stMetricValue"] {
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        div[data-testid="stExpander"] {
+            background: rgba(255,255,255,.82);
+            border: 1px solid var(--border) !important;
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+
+        div[data-testid="stForm"] {
+            background: rgba(255,255,255,.90);
+            border: 1px solid var(--border);
+            padding: 22px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stTextInput input,
+        .stTextArea textarea,
+        .stSelectbox [data-baseweb="select"] > div,
+        .stMultiSelect [data-baseweb="select"] > div {
+            border-radius: 14px !important;
+            border-color: #cbd5e1 !important;
+            background: #ffffff !important;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        }
+
+        .stTextInput input:focus,
+        .stTextArea textarea:focus {
+            border-color: var(--primary) !important;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, .14) !important;
+        }
+
+        div[data-testid="stButton"] > button,
+        div[data-testid="stDownloadButton"] > button,
+        button[kind="primary"],
+        button[kind="secondary"] {
+            border-radius: 999px !important;
+            min-height: 42px;
+            font-weight: 800 !important;
+            border: 1px solid transparent !important;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, .10);
+            transition: all .18s ease-in-out;
+        }
+
+        div[data-testid="stButton"] > button:hover,
+        div[data-testid="stDownloadButton"] > button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 26px rgba(15, 23, 42, .14);
+        }
+
+        button[kind="primary"],
+        div[data-testid="stButton"] button[kind="primary"],
+        div[data-testid="stDownloadButton"] button[kind="primary"] {
+            background: linear-gradient(135deg, var(--primary), #0ea5e9) !important;
+            color: #ffffff !important;
+        }
+
+        button[kind="secondary"],
+        div[data-testid="stButton"] button[kind="secondary"],
+        div[data-testid="stDownloadButton"] button[kind="secondary"] {
+            background: #ffffff !important;
+            color: #1e293b !important;
+            border-color: var(--border) !important;
+        }
+
+        div[data-testid="stDataFrame"] {
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        h1, h2, h3 {
+            letter-spacing: -0.035em;
+        }
+
+        h2, h3, .stMarkdown strong {
+            color: var(--text-main);
+        }
+
+        hr {
+            border-color: rgba(148, 163, 184, .28) !important;
+            margin: 1.5rem 0 !important;
+        }
+
+        img {
+            border-radius: 14px;
+        }
+
+        [data-testid="stCaptionContainer"] {
+            color: var(--text-muted);
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+aplicar_tema_visual()
+
 # ── Configuração de caminhos / Supabase ─────────────────────────────────────
 BASE_DIR        = os.path.dirname(os.path.abspath(__file__))
 CLIENTES        = os.path.join(BASE_DIR, "nome_clientes.xlsx")
@@ -2162,7 +2404,12 @@ def exibir_auditoria_lpr(cameras_df, df_salvos, id_cliente_selecionado=None):
 
 # ── Interface Principal ──────────────────────────────────────────────────────
 def main():
-    st.title("📷 Central de Auditoria de Câmeras")
+    st.markdown("""
+    <div class="hero-auditoria">
+        <h1>📷 Central de Auditoria de Câmeras</h1>
+        <p>Audite câmeras, acompanhe evidências e gere relatórios com uma interface mais limpa, moderna e organizada.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
     cameras_df, erro = carregar_arquivos_origem()
     if erro:

@@ -208,11 +208,65 @@ def obter_coluna_existente(df, opcoes):
 
 
 def aplicar_estilo_profissional():
-    """Aplica somente ajustes seguros de espaçamento, sem interferir em botões/abas."""
+    """Aplica um visual mais limpo e corporativo sem depender de bibliotecas externas."""
     st.markdown("""
     <style>
-        .block-container {
-            padding-top: 0.6rem;
+        .block-container { padding-top: 0.6rem; }
+        div[data-testid="stMetric"] {
+            background: #ffffff;
+            border: 1px solid #e8edf3;
+            padding: 14px 16px;
+            border-radius: 16px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+        }
+        div[data-testid="stMetric"] label {
+            color: #64748b;
+            font-weight: 700;
+        }
+        div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+            color: #0f172a;
+            font-weight: 800;
+        }
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 14px;
+            background: #ffffff;
+            border: 1px solid #e8edf3;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            margin: 4px 0 12px 0;
+        }
+        .top-bar-title {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.2;
+        }
+        .top-bar-subtitle {
+            font-size: 0.82rem;
+            color: #64748b;
+            margin-top: 2px;
+        }
+        .filter-pill {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e3a8a;
+            font-size: 0.85rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .section-card {
+            border: 1px solid #e8edf3;
+            border-radius: 16px;
+            padding: 16px;
+            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
         }
     </style>
     """, unsafe_allow_html=True)
@@ -283,24 +337,11 @@ def calcular_indicadores_dashboard(cameras_df, df_salvos, id_cliente=None):
 
 
 def exibir_metricas_em_linha(metricas):
-    """Exibe KPIs com componentes nativos do Streamlit para não quebrar botões/abas."""
-    if not metricas:
-        return
-
     cols = st.columns(len(metricas))
     for col, item in zip(cols, metricas):
-        label = item.get("label", "") if isinstance(item, dict) else item[0]
-        valor = item.get("valor", 0) if isinstance(item, dict) else item[1]
-        icone = item.get("icone", "📊") if isinstance(item, dict) else "📊"
-        extra = item.get("extra", "") if isinstance(item, dict) else ""
+        label, valor, delta = item if len(item) == 3 else (item[0], item[1], None)
+        col.metric(label, formatar_numero(valor), delta=delta)
 
-        titulo = f"{icone} {label}".strip()
-        valor_fmt = formatar_numero(valor)
-
-        with col:
-            st.metric(label=titulo, value=valor_fmt)
-            if str(extra).strip():
-                st.caption(str(extra))
 
 def obter_nome_cliente(cameras_df, id_cliente):
     if not id_cliente or cameras_df is None or cameras_df.empty:
@@ -320,7 +361,7 @@ def exibir_home_executiva(cameras_df, df_salvos):
 
     if ultima:
         info_atualizacao = (
-            f"🕒 Última atualização: {ultima.get('data_importacao_formatada', '-')} · "
+            f"🕒 Última atualização: {escape(str(ultima.get('data_importacao_formatada', '-')))} · "
             f"Novas: {formatar_numero(ultima.get('novas', 0))} · "
             f"Atualizadas: {formatar_numero(ultima.get('atualizadas', 0))} · "
             f"Auditorias sincronizadas: {formatar_numero(ultima.get('auditorias_sincronizadas', 0))}"
@@ -328,39 +369,41 @@ def exibir_home_executiva(cameras_df, df_salvos):
     else:
         info_atualizacao = "🕒 Última atualização: ainda não registrada pelo novo histórico."
 
-    st.subheader("📷 Central de Auditoria de Câmeras")
-    st.caption(info_atualizacao)
-    st.info(f"📍 Visualizando: {nome_filtro}")
+    st.markdown(
+        f"""
+        <div class="top-bar">
+            <div>
+                <div class="top-bar-title">📷 Central de Auditoria de Câmeras</div>
+                <div class="top-bar-subtitle">{info_atualizacao}</div>
+            </div>
+            <span class="filter-pill">📍 Visualizando: {escape(str(nome_filtro))}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-
-    total = max(indicadores["total_cameras"], 1)
-    pct_online = round(indicadores["online"] / total * 100, 1) if indicadores["total_cameras"] else 0
-    pct_offline = round(indicadores["offline"] / total * 100, 1) if indicadores["total_cameras"] else 0
-    pct_auditadas = round(indicadores["auditadas"] / total * 100, 1) if indicadores["total_cameras"] else 0
-    pct_pendentes = round(indicadores["pendentes"] / total * 100, 1) if indicadores["total_cameras"] else 0
-
-    st.markdown("### Operação")
+    st.subheader("Operação")
     exibir_metricas_em_linha([
-        {"label": "Clientes", "valor": indicadores["clientes"], "icone": "👥", "cor": "blue"},
-        {"label": "Câmeras", "valor": indicadores["total_cameras"], "icone": "📷", "cor": "indigo"},
-        {"label": "Online", "valor": indicadores["online"], "icone": "🟢", "cor": "green", "extra": f"{pct_online}% da base"},
-        {"label": "Offline", "valor": indicadores["offline"], "icone": "🔴", "cor": "red", "extra": f"{pct_offline}% da base"},
+        ("Clientes", indicadores["clientes"], None),
+        ("Câmeras", indicadores["total_cameras"], None),
+        ("Online", indicadores["online"], None),
+        ("Offline", indicadores["offline"], None),
     ])
 
-    st.markdown("### Auditoria")
+    st.subheader("Auditoria")
     exibir_metricas_em_linha([
-        {"label": "Auditadas", "valor": indicadores["auditadas"], "icone": "✅", "cor": "green", "extra": f"{pct_auditadas}% da base"},
-        {"label": "Pendentes", "valor": indicadores["pendentes"], "icone": "⏳", "cor": "orange", "extra": f"{pct_pendentes}% da base"},
-        {"label": "Aprovadas", "valor": indicadores["aprovadas"], "icone": "✔️", "cor": "blue"},
-        {"label": "Reprovadas", "valor": indicadores["reprovadas"], "icone": "🚨", "cor": "red"},
+        ("Auditadas", indicadores["auditadas"], None),
+        ("Pendentes", indicadores["pendentes"], None),
+        ("Aprovadas", indicadores["aprovadas"], None),
+        ("Reprovadas", indicadores["reprovadas"], None),
     ])
 
-    st.markdown("### LPR")
+    st.subheader("LPR")
     exibir_metricas_em_linha([
-        {"label": "LPRs", "valor": indicadores["lprs"], "icone": "📡", "cor": "purple"},
-        {"label": "LPR Offline", "valor": indicadores["lpr_offline"], "icone": "🔴", "cor": "red"},
-        {"label": "LPR Auditadas", "valor": indicadores["lpr_auditadas"], "icone": "✅", "cor": "green"},
-        {"label": "LPR Reprovadas", "valor": indicadores["lpr_reprovadas"], "icone": "🚨", "cor": "orange"},
+        ("LPRs", indicadores["lprs"], None),
+        ("LPR Offline", indicadores["lpr_offline"], None),
+        ("LPR Auditadas", indicadores["lpr_auditadas"], None),
+        ("LPR Reprovadas", indicadores["lpr_reprovadas"], None),
     ])
 
     st.divider()

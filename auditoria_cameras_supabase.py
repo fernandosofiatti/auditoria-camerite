@@ -208,134 +208,11 @@ def obter_coluna_existente(df, opcoes):
 
 
 def aplicar_estilo_profissional():
-    """Aplica um visual mais limpo e corporativo sem depender de bibliotecas externas."""
+    """Aplica somente ajustes seguros de espaçamento, sem interferir em botões/abas."""
     st.markdown("""
     <style>
-        .block-container { 
-            padding-top: 0.6rem; 
-        }
-
-        /* CSS isolado: só afeta elementos que tenham classe kpi-* */
-        .kpi-card {
-            min-height: 112px;
-            border-radius: 20px;
-            padding: 18px 18px 16px 18px;
-            color: #ffffff;
-            box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);
-            border: 1px solid rgba(255,255,255,0.20);
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 12px;
-        }
-
-        .kpi-card::after {
-            content: "";
-            position: absolute;
-            right: -34px;
-            top: -34px;
-            width: 112px;
-            height: 112px;
-            background: rgba(255,255,255,0.16);
-            border-radius: 999px;
-        }
-
-        .kpi-card .kpi-icon {
-            font-size: 1.35rem;
-            line-height: 1;
-            margin-bottom: 10px;
-            opacity: 0.98;
-            color: #ffffff;
-            position: relative;
-            z-index: 2;
-        }
-
-        .kpi-card .kpi-value {
-            font-size: 2.05rem;
-            line-height: 1.05;
-            font-weight: 900;
-            letter-spacing: -0.04em;
-            margin-bottom: 4px;
-            color: #ffffff;
-            position: relative;
-            z-index: 2;
-        }
-
-        .kpi-card .kpi-label {
-            font-size: 0.88rem;
-            font-weight: 800;
-            opacity: 0.95;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: #ffffff;
-            position: relative;
-            z-index: 2;
-        }
-
-        .kpi-card .kpi-extra {
-            margin-top: 7px;
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 999px;
-            background: rgba(255,255,255,0.18);
-            font-size: 0.78rem;
-            font-weight: 800;
-            color: #ffffff;
-            position: relative;
-            z-index: 2;
-        }
-
-        .kpi-blue { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
-        .kpi-indigo { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); }
-        .kpi-green { background: linear-gradient(135deg, #16a34a 0%, #166534 100%); }
-        .kpi-red { background: linear-gradient(135deg, #ef4444 0%, #991b1b 100%); }
-        .kpi-orange { background: linear-gradient(135deg, #f97316 0%, #c2410c 100%); }
-        .kpi-purple { background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); }
-        .kpi-slate { background: linear-gradient(135deg, #475569 0%, #1e293b 100%); }
-
-        .top-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 10px 14px;
-            border-radius: 14px;
-            background: #ffffff;
-            border: 1px solid #e8edf3;
-            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
-            margin: 4px 0 12px 0;
-        }
-
-        .top-bar-title {
-            font-size: 1.05rem;
-            font-weight: 800;
-            color: #0f172a;
-            line-height: 1.2;
-        }
-
-        .top-bar-subtitle {
-            font-size: 0.82rem;
-            color: #64748b;
-            margin-top: 2px;
-        }
-
-        .filter-pill {
-            display: inline-block;
-            padding: 6px 10px;
-            border-radius: 999px;
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            color: #1e3a8a;
-            font-size: 0.85rem;
-            font-weight: 700;
-            white-space: nowrap;
-        }
-
-        .section-card {
-            border: 1px solid #e8edf3;
-            border-radius: 16px;
-            padding: 16px;
-            background: #ffffff;
-            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+        .block-container {
+            padding-top: 0.6rem;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -406,25 +283,24 @@ def calcular_indicadores_dashboard(cameras_df, df_salvos, id_cliente=None):
 
 
 def exibir_metricas_em_linha(metricas):
-    """Exibe KPIs em cards coloridos, com visual de dashboard executivo."""
+    """Exibe KPIs com componentes nativos do Streamlit para não quebrar botões/abas."""
+    if not metricas:
+        return
+
     cols = st.columns(len(metricas))
     for col, item in zip(cols, metricas):
         label = item.get("label", "") if isinstance(item, dict) else item[0]
         valor = item.get("valor", 0) if isinstance(item, dict) else item[1]
         icone = item.get("icone", "📊") if isinstance(item, dict) else "📊"
-        cor = item.get("cor", "blue") if isinstance(item, dict) else "blue"
         extra = item.get("extra", "") if isinstance(item, dict) else ""
-        extra_html = f'<div class="kpi-extra">{escape(str(extra))}</div>' if str(extra).strip() else ""
-        html_card = f"""
-            <div class="kpi-card kpi-{escape(str(cor))}">
-                <div class="kpi-icon">{escape(str(icone))}</div>
-                <div class="kpi-value">{escape(formatar_numero(valor))}</div>
-                <div class="kpi-label">{escape(str(label))}</div>
-                {extra_html}
-            </div>
-        """
-        col.markdown(html_card, unsafe_allow_html=True)
 
+        titulo = f"{icone} {label}".strip()
+        valor_fmt = formatar_numero(valor)
+
+        with col:
+            st.metric(label=titulo, value=valor_fmt)
+            if str(extra).strip():
+                st.caption(str(extra))
 
 def obter_nome_cliente(cameras_df, id_cliente):
     if not id_cliente or cameras_df is None or cameras_df.empty:
@@ -444,7 +320,7 @@ def exibir_home_executiva(cameras_df, df_salvos):
 
     if ultima:
         info_atualizacao = (
-            f"🕒 Última atualização: {escape(str(ultima.get('data_importacao_formatada', '-')))} · "
+            f"🕒 Última atualização: {ultima.get('data_importacao_formatada', '-')} · "
             f"Novas: {formatar_numero(ultima.get('novas', 0))} · "
             f"Atualizadas: {formatar_numero(ultima.get('atualizadas', 0))} · "
             f"Auditorias sincronizadas: {formatar_numero(ultima.get('auditorias_sincronizadas', 0))}"
@@ -452,18 +328,10 @@ def exibir_home_executiva(cameras_df, df_salvos):
     else:
         info_atualizacao = "🕒 Última atualização: ainda não registrada pelo novo histórico."
 
-    st.markdown(
-        f"""
-        <div class="top-bar">
-            <div>
-                <div class="top-bar-title">📷 Central de Auditoria de Câmeras</div>
-                <div class="top-bar-subtitle">{info_atualizacao}</div>
-            </div>
-            <span class="filter-pill">📍 Visualizando: {escape(str(nome_filtro))}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.subheader("📷 Central de Auditoria de Câmeras")
+    st.caption(info_atualizacao)
+    st.info(f"📍 Visualizando: {nome_filtro}")
+
 
     total = max(indicadores["total_cameras"], 1)
     pct_online = round(indicadores["online"] / total * 100, 1) if indicadores["total_cameras"] else 0

@@ -211,7 +211,11 @@ def aplicar_estilo_profissional():
     """Aplica um visual mais limpo e corporativo sem depender de bibliotecas externas."""
     st.markdown("""
     <style>
-        .block-container { padding-top: 0.6rem; }
+        .block-container { 
+            padding-top: 0.6rem; 
+        }
+
+        /* CSS isolado: só afeta elementos que tenham classe kpi-* */
         .kpi-card {
             min-height: 112px;
             border-radius: 20px;
@@ -223,7 +227,8 @@ def aplicar_estilo_profissional():
             overflow: hidden;
             margin-bottom: 12px;
         }
-        .kpi-card:after {
+
+        .kpi-card::after {
             content: "";
             position: absolute;
             right: -34px;
@@ -233,31 +238,40 @@ def aplicar_estilo_profissional():
             background: rgba(255,255,255,0.16);
             border-radius: 999px;
         }
-        .kpi-icon {
+
+        .kpi-card .kpi-icon {
             font-size: 1.35rem;
             line-height: 1;
             margin-bottom: 10px;
             opacity: 0.98;
+            color: #ffffff;
+            position: relative;
+            z-index: 2;
         }
-        .kpi-value {
+
+        .kpi-card .kpi-value {
             font-size: 2.05rem;
             line-height: 1.05;
             font-weight: 900;
             letter-spacing: -0.04em;
             margin-bottom: 4px;
+            color: #ffffff;
             position: relative;
             z-index: 2;
         }
-        .kpi-label {
+
+        .kpi-card .kpi-label {
             font-size: 0.88rem;
             font-weight: 800;
             opacity: 0.95;
             text-transform: uppercase;
             letter-spacing: 0.04em;
+            color: #ffffff;
             position: relative;
             z-index: 2;
         }
-        .kpi-extra {
+
+        .kpi-card .kpi-extra {
             margin-top: 7px;
             display: inline-block;
             padding: 3px 8px;
@@ -265,9 +279,11 @@ def aplicar_estilo_profissional():
             background: rgba(255,255,255,0.18);
             font-size: 0.78rem;
             font-weight: 800;
+            color: #ffffff;
             position: relative;
             z-index: 2;
         }
+
         .kpi-blue { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
         .kpi-indigo { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); }
         .kpi-green { background: linear-gradient(135deg, #16a34a 0%, #166534 100%); }
@@ -275,6 +291,7 @@ def aplicar_estilo_profissional():
         .kpi-orange { background: linear-gradient(135deg, #f97316 0%, #c2410c 100%); }
         .kpi-purple { background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); }
         .kpi-slate { background: linear-gradient(135deg, #475569 0%, #1e293b 100%); }
+
         .top-bar {
             display: flex;
             align-items: center;
@@ -287,17 +304,20 @@ def aplicar_estilo_profissional():
             box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
             margin: 4px 0 12px 0;
         }
+
         .top-bar-title {
             font-size: 1.05rem;
             font-weight: 800;
             color: #0f172a;
             line-height: 1.2;
         }
+
         .top-bar-subtitle {
             font-size: 0.82rem;
             color: #64748b;
             margin-top: 2px;
         }
+
         .filter-pill {
             display: inline-block;
             padding: 6px 10px;
@@ -309,82 +329,13 @@ def aplicar_estilo_profissional():
             font-weight: 700;
             white-space: nowrap;
         }
+
         .section-card {
             border: 1px solid #e8edf3;
             border-radius: 16px;
             padding: 16px;
             background: #ffffff;
             box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
-        }
-
-        /* Correção definitiva para tabs/botões do Streamlit.
-           O Streamlit renderiza as abas como:
-           button[data-baseweb="tab"] > div[data-testid="stMarkdownContainer"] > p
-        */
-
-        button[data-baseweb="tab"],
-        button[data-baseweb="tab"] div,
-        button[data-baseweb="tab"] p,
-        button[data-baseweb="tab"] span,
-        button[data-testid="stTab"],
-        button[data-testid="stTab"] div,
-        button[data-testid="stTab"] p,
-        button[data-testid="stTab"] span {
-            color: #0f172a !important;
-            -webkit-text-fill-color: #0f172a !important;
-            opacity: 1 !important;
-            visibility: visible !important;
-        }
-
-        button[data-baseweb="tab"][aria-selected="true"],
-        button[data-baseweb="tab"][aria-selected="true"] div,
-        button[data-baseweb="tab"][aria-selected="true"] p,
-        button[data-baseweb="tab"][aria-selected="true"] span,
-        button[data-testid="stTab"][aria-selected="true"],
-        button[data-testid="stTab"][aria-selected="true"] div,
-        button[data-testid="stTab"][aria-selected="true"] p,
-        button[data-testid="stTab"][aria-selected="true"] span {
-            color: #dc2626 !important;
-            -webkit-text-fill-color: #dc2626 !important;
-            opacity: 1 !important;
-            font-weight: 800 !important;
-        }
-
-        /* Botões normais do Streamlit */
-        div[data-testid="stButton"] button,
-        div[data-testid="stButton"] button div,
-        div[data-testid="stButton"] button p,
-        div[data-testid="stButton"] button span,
-        div[data-testid="stDownloadButton"] button,
-        div[data-testid="stDownloadButton"] button div,
-        div[data-testid="stDownloadButton"] button p,
-        div[data-testid="stDownloadButton"] button span,
-        button[data-testid="baseButton-secondary"],
-        button[data-testid="baseButton-secondary"] *,
-        button[data-testid="baseButton-primary"],
-        button[data-testid="baseButton-primary"] * {
-            opacity: 1 !important;
-            visibility: visible !important;
-        }
-
-        button[data-testid="baseButton-secondary"],
-        button[data-testid="baseButton-secondary"] *,
-        div[data-testid="stButton"] button[kind="secondary"],
-        div[data-testid="stButton"] button[kind="secondary"] *,
-        div[data-testid="stDownloadButton"] button[kind="secondary"],
-        div[data-testid="stDownloadButton"] button[kind="secondary"] * {
-            color: #0f172a !important;
-            -webkit-text-fill-color: #0f172a !important;
-        }
-
-        button[data-testid="baseButton-primary"],
-        button[data-testid="baseButton-primary"] *,
-        div[data-testid="stButton"] button[kind="primary"],
-        div[data-testid="stButton"] button[kind="primary"] *,
-        div[data-testid="stDownloadButton"] button[kind="primary"],
-        div[data-testid="stDownloadButton"] button[kind="primary"] * {
-            color: #ffffff !important;
-            -webkit-text-fill-color: #ffffff !important;
         }
     </style>
     """, unsafe_allow_html=True)

@@ -29,27 +29,27 @@ except Exception:
 st.set_page_config(page_title="Auditoria de Câmeras", page_icon="📷", layout="wide")
 
 
-# ── Tema visual moderno (somente embelezamento) ─────────────────────────────
+# ── Tema visual Camerite roxo (somente embelezamento) ─────────────────────────────
 def aplicar_tema_visual():
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
         :root {
-            --bg-app: #f5f7fb;
+            --bg-app: #F8F5FF;
             --surface: #ffffff;
-            --surface-soft: #f8fafc;
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --primary-soft: #dbeafe;
+            --surface-soft: #FBFAFF;
+            --primary: #7C3AED;
+            --primary-dark: #5B21B6;
+            --primary-soft: #EDE9FE;
             --success: #16a34a;
             --danger: #dc2626;
             --warning: #f59e0b;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --border: #e2e8f0;
-            --shadow-sm: 0 4px 16px rgba(15, 23, 42, .06);
-            --shadow-md: 0 12px 32px rgba(15, 23, 42, .10);
+            --text-main: #120A1F;
+            --text-muted: #6B5A80;
+            --border: #E9D5FF;
+            --shadow-sm: 0 4px 16px rgba(18, 10, 31, .06);
+            --shadow-md: 0 12px 32px rgba(18, 10, 31, .10);
             --radius: 18px;
         }
 
@@ -59,8 +59,8 @@ def aplicar_tema_visual():
 
         .stApp {
             background:
-                radial-gradient(circle at top left, rgba(37, 99, 235, .13), transparent 34%),
-                radial-gradient(circle at top right, rgba(14, 165, 233, .10), transparent 30%),
+                radial-gradient(circle at top left, rgba(124, 58, 237, .13), transparent 34%),
+                radial-gradient(circle at top right, rgba(168, 85, 247, .10), transparent 30%),
                 var(--bg-app);
             color: var(--text-main);
         }
@@ -72,12 +72,12 @@ def aplicar_tema_visual():
         }
 
         section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            background: linear-gradient(180deg, #1A0B2E 0%, #2D1450 100%);
             border-right: 1px solid rgba(255,255,255,.08);
         }
 
         section[data-testid="stSidebar"] * {
-            color: #f8fafc !important;
+            color: #FBFAFF !important;
         }
 
         section[data-testid="stSidebar"] [data-testid="stMetric"] {
@@ -98,7 +98,7 @@ def aplicar_tema_visual():
         .hero-auditoria {
             padding: 28px 30px;
             border-radius: 26px;
-            background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 52%, #38bdf8 100%);
+            background: linear-gradient(135deg, #5B21B6 0%, #7C3AED 48%, #A855F7 100%);
             color: white;
             box-shadow: var(--shadow-md);
             margin-bottom: 20px;
@@ -137,7 +137,7 @@ def aplicar_tema_visual():
             padding: 10px 18px;
             margin-right: 6px;
             font-weight: 700;
-            color: #334155;
+            color: #3B2A52;
             background: rgba(255,255,255,.72);
             border: 1px solid var(--border);
         }
@@ -146,7 +146,7 @@ def aplicar_tema_visual():
             background: var(--primary) !important;
             color: #ffffff !important;
             border-color: var(--primary) !important;
-            box-shadow: 0 8px 20px rgba(37, 99, 235, .28);
+            box-shadow: 0 8px 20px rgba(124, 58, 237, .28);
         }
 
         div[data-testid="stMetric"],
@@ -195,15 +195,15 @@ def aplicar_tema_visual():
         .stSelectbox [data-baseweb="select"] > div,
         .stMultiSelect [data-baseweb="select"] > div {
             border-radius: 14px !important;
-            border-color: #cbd5e1 !important;
+            border-color: #C4B5FD !important;
             background: #ffffff !important;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+            box-shadow: 0 1px 2px rgba(18, 10, 31, .04);
         }
 
         .stTextInput input:focus,
         .stTextArea textarea:focus {
             border-color: var(--primary) !important;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, .14) !important;
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, .14) !important;
         }
 
         div[data-testid="stButton"] > button,
@@ -214,20 +214,20 @@ def aplicar_tema_visual():
             min-height: 42px;
             font-weight: 800 !important;
             border: 1px solid transparent !important;
-            box-shadow: 0 8px 20px rgba(15, 23, 42, .10);
+            box-shadow: 0 8px 20px rgba(18, 10, 31, .10);
             transition: all .18s ease-in-out;
         }
 
         div[data-testid="stButton"] > button:hover,
         div[data-testid="stDownloadButton"] > button:hover {
             transform: translateY(-1px);
-            box-shadow: 0 12px 26px rgba(15, 23, 42, .14);
+            box-shadow: 0 12px 26px rgba(18, 10, 31, .14);
         }
 
         button[kind="primary"],
         div[data-testid="stButton"] button[kind="primary"],
         div[data-testid="stDownloadButton"] button[kind="primary"] {
-            background: linear-gradient(135deg, var(--primary), #0ea5e9) !important;
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary), #A855F7) !important;
             color: #ffffff !important;
         }
 
@@ -235,7 +235,7 @@ def aplicar_tema_visual():
         div[data-testid="stButton"] button[kind="secondary"],
         div[data-testid="stDownloadButton"] button[kind="secondary"] {
             background: #ffffff !important;
-            color: #1e293b !important;
+            color: #241239 !important;
             border-color: var(--border) !important;
         }
 
@@ -1185,7 +1185,7 @@ def carregar_arquivos_origem():
 # ── Exportar para Excel com Imagens Embutidas ───────────────────────────────
 def gerar_excel(df_registros):
     wb = Workbook()
-    AZUL_HEADER = "1F4E79"
+    ROXO_HEADER = "7C3AED"
     VERDE       = "C6EFCE"
     VERMELHO    = "FFC7CE"
     CINZA_GRUPO = "D9EAF7"
@@ -1203,7 +1203,7 @@ def gerar_excel(df_registros):
     for col, nome in enumerate(colunas, 1):
         c = ws.cell(row=1, column=col, value=nome)
         c.font      = Font(bold=True, color="FFFFFF")
-        c.fill      = PatternFill("solid", fgColor=AZUL_HEADER)
+        c.fill      = PatternFill("solid", fgColor=ROXO_HEADER)
         c.alignment = Alignment(horizontal="center", wrap_text=True)
 
     for row_n, row_data in df.reset_index(drop=True).iterrows():
@@ -1228,10 +1228,10 @@ def gerar_excel(df_registros):
 
     ws_fotos = wb.create_sheet("Relatório Fotográfico")
     ws_fotos.cell(row=1, column=1, value="Evidência Visual (Print)").font = Font(bold=True, color="FFFFFF")
-    ws_fotos.cell(row=1, column=1).fill = PatternFill("solid", fgColor=AZUL_HEADER)
+    ws_fotos.cell(row=1, column=1).fill = PatternFill("solid", fgColor=ROXO_HEADER)
     ws_fotos.cell(row=1, column=1).alignment = Alignment(horizontal="center")
     ws_fotos.cell(row=1, column=2, value="Detalhamento da Câmera").font = Font(bold=True, color="FFFFFF")
-    ws_fotos.cell(row=1, column=2).fill = PatternFill("solid", fgColor=AZUL_HEADER)
+    ws_fotos.cell(row=1, column=2).fill = PatternFill("solid", fgColor=ROXO_HEADER)
     ws_fotos.cell(row=1, column=2).alignment = Alignment(horizontal="left")
     ws_fotos.column_dimensions["A"].width = 50  
     ws_fotos.column_dimensions["B"].width = 60  
@@ -1298,7 +1298,7 @@ def gerar_excel(df_registros):
     ws2.append(["ID_Whitelabel", "Franqueado", "Total Auditadas", "Aprovadas", "Reprovadas", "% Aprovação"])
     for cell in ws2[1]:
         cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor=AZUL_HEADER)
+        cell.fill = PatternFill("solid", fgColor=ROXO_HEADER)
         cell.alignment = Alignment(horizontal="center")
 
     for (id_wl, franq), grp in df.groupby(["ID_Whitelabel", "Franqueado"]):
@@ -1351,7 +1351,7 @@ def gerar_pdf(df_registros):
         [str(total), str(aprov), str(reprov), f"{pct}%"],
     ], colWidths=[4 * cm, 4 * cm, 4 * cm, 4 * cm])
     resumo.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#7C3AED")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
@@ -1372,7 +1372,7 @@ def gerar_pdf(df_registros):
 
     tab = Table(tabela_clientes, colWidths=[2.2 * cm, 6.0 * cm, 2 * cm, 2 * cm, 2 * cm, 2 * cm], repeatRows=1)
     tab.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#7C3AED")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
@@ -1465,7 +1465,7 @@ def contar_evidencias_camera(row):
 def gerar_excel_reprovadas_agrupadas(df_registros):
     """Gera Excel somente com reprovadas, agrupadas por cliente."""
     wb = Workbook()
-    AZUL_HEADER = "1F4E79"
+    ROXO_HEADER = "7C3AED"
     VERMELHO = "FFC7CE"
     CINZA_GRUPO = "D9EAF7"
 
@@ -1480,7 +1480,7 @@ def gerar_excel_reprovadas_agrupadas(df_registros):
     ws.append(colunas)
     for cell in ws[1]:
         cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor=AZUL_HEADER)
+        cell.fill = PatternFill("solid", fgColor=ROXO_HEADER)
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
     linha = 2
@@ -1514,7 +1514,7 @@ def gerar_excel_reprovadas_agrupadas(df_registros):
     ws_resumo.append(["ID_Whitelabel", "Franqueado", "Cidade/UF", "Qtd Reprovadas", "Qtd Evidências"])
     for cell in ws_resumo[1]:
         cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor=AZUL_HEADER)
+        cell.fill = PatternFill("solid", fgColor=ROXO_HEADER)
         cell.alignment = Alignment(horizontal="center")
 
     if not df.empty:
@@ -1530,7 +1530,7 @@ def gerar_excel_reprovadas_agrupadas(df_registros):
     ws_fotos.append(["Evidência Visual", "Detalhamento"])
     for cell in ws_fotos[1]:
         cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor=AZUL_HEADER)
+        cell.fill = PatternFill("solid", fgColor=ROXO_HEADER)
     ws_fotos.column_dimensions["A"].width = 50
     ws_fotos.column_dimensions["B"].width = 70
 
@@ -1634,7 +1634,7 @@ def gerar_pdf_reprovadas_agrupadas(df_registros):
 
     tab_resumo = Table(resumo, colWidths=[2.5 * cm, 8 * cm, 3 * cm, 3 * cm], repeatRows=1)
     tab_resumo.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#7C3AED")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
@@ -1659,7 +1659,7 @@ def gerar_pdf_reprovadas_agrupadas(df_registros):
             ])
         tab_cams = Table(tabela_cams, colWidths=[2.7 * cm, 5.2 * cm, 2.8 * cm, 1.4 * cm, 5.0 * cm], repeatRows=1)
         tab_cams.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#7C3AED")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
@@ -1802,25 +1802,25 @@ def montar_html_email_reprovadas(df_registros, titulo_filtro="Todos os clientes"
 <style>
     body { font-family: Arial, Calibri, sans-serif; color: #1f2937; margin: 0; background: #f3f6fa; }
     .page { max-width: 1040px; margin: 24px auto; background: #fff; padding: 28px; border-radius: 14px; box-shadow: 0 8px 24px rgba(15,23,42,.10); }
-    .header { border-bottom: 4px solid #1F4E79; padding-bottom: 14px; margin-bottom: 22px; }
-    h1 { margin: 0; color: #1F4E79; font-size: 26px; }
-    h2 { color: #1F4E79; border-bottom: 1px solid #d7e3ef; padding-bottom: 6px; margin-top: 32px; }
+    .header { border-bottom: 4px solid #7C3AED; padding-bottom: 14px; margin-bottom: 22px; }
+    h1 { margin: 0; color: #7C3AED; font-size: 26px; }
+    h2 { color: #7C3AED; border-bottom: 1px solid #E9D5FF; padding-bottom: 6px; margin-top: 32px; }
     h3 { margin: 0 0 10px 0; color: #991b1b; }
-    .muted { color: #64748b; font-size: 13px; }
+    .muted { color: #6B5A80; font-size: 13px; }
     .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 24px; }
     .card { background: #eef6fd; border: 1px solid #cfe4f4; border-radius: 10px; padding: 14px; text-align: center; }
-    .card .num { font-size: 24px; font-weight: 700; color: #1F4E79; }
+    .card .num { font-size: 24px; font-weight: 700; color: #7C3AED; }
     .card .label { font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .04em; }
     table { border-collapse: collapse; width: 100%; margin: 14px 0 24px; }
-    th { background: #1F4E79; color: #fff; text-align: left; padding: 9px; border: 1px solid #dbeafe; }
-    td { padding: 9px; border: 1px solid #e2e8f0; vertical-align: top; }
-    tr:nth-child(even) td { background: #f8fafc; }
-    .camera { border: 1px solid #e2e8f0; border-left: 6px solid #ef4444; border-radius: 12px; padding: 16px; margin: 18px 0; page-break-inside: avoid; }
+    th { background: #7C3AED; color: #fff; text-align: left; padding: 9px; border: 1px solid #EDE9FE; }
+    td { padding: 9px; border: 1px solid #E9D5FF; vertical-align: top; }
+    tr:nth-child(even) td { background: #FBFAFF; }
+    .camera { border: 1px solid #E9D5FF; border-left: 6px solid #ef4444; border-radius: 12px; padding: 16px; margin: 18px 0; page-break-inside: avoid; }
     .details { line-height: 1.55; margin-bottom: 12px; }
     .img-wrap { margin: 12px 0 18px; }
-    .img-wrap img { display: block; max-width: 100%; height: auto; border: 1px solid #cbd5e1; border-radius: 8px; }
-    .img-caption { font-size: 12px; color: #64748b; margin-top: 4px; }
-    .no-img { color: #64748b; font-style: italic; background: #f8fafc; padding: 10px; border-radius: 8px; }
+    .img-wrap img { display: block; max-width: 100%; height: auto; border: 1px solid #C4B5FD; border-radius: 8px; }
+    .img-caption { font-size: 12px; color: #6B5A80; margin-top: 4px; }
+    .no-img { color: #6B5A80; font-style: italic; background: #FBFAFF; padding: 10px; border-radius: 8px; }
     @media print { body { background: #fff; } .page { box-shadow: none; margin: 0; max-width: none; } .camera { break-inside: avoid; } }
 </style>
 </head>
@@ -2165,7 +2165,7 @@ def gerar_excel_auditoria_lpr(df_lpr):
     ws = wb.active
     ws.title = "Auditoria LPR"
 
-    AZUL_HEADER = "1F4E79"
+    ROXO_HEADER = "7C3AED"
     VERDE = "C6EFCE"
     VERMELHO = "FFC7CE"
     AMARELO = "FFF2CC"
@@ -2182,7 +2182,7 @@ def gerar_excel_auditoria_lpr(df_lpr):
     for col_idx, nome_coluna in enumerate(colunas, 1):
         cel = ws.cell(row=1, column=col_idx, value=nome_coluna)
         cel.font = Font(bold=True, color="FFFFFF")
-        cel.fill = PatternFill("solid", fgColor=AZUL_HEADER)
+        cel.fill = PatternFill("solid", fgColor=ROXO_HEADER)
         cel.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     for row_idx, row in df.reset_index(drop=True).iterrows():
@@ -2222,7 +2222,7 @@ def gerar_excel_auditoria_lpr(df_lpr):
         ws_resumo.append(list(item))
     for cell in ws_resumo[1]:
         cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor=AZUL_HEADER)
+        cell.fill = PatternFill("solid", fgColor=ROXO_HEADER)
     ws_resumo.column_dimensions["A"].width = 28
     ws_resumo.column_dimensions["B"].width = 18
 
@@ -2255,15 +2255,15 @@ def gerar_html_auditoria_lpr(df_lpr, titulo_filtro="Todos os clientes"):
         <title>Relatório Auditoria LPR</title>
         <style>
             body {{ font-family: Arial, sans-serif; color: #1f2937; margin: 28px; }}
-            h1 {{ color: #1F4E79; margin-bottom: 4px; }}
+            h1 {{ color: #7C3AED; margin-bottom: 4px; }}
             .sub {{ color: #4b5563; margin-bottom: 24px; }}
             .cards {{ display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }}
             .card {{ border: 1px solid #d1d5db; border-radius: 10px; padding: 12px 16px; min-width: 145px; }}
             .card b {{ display: block; font-size: 22px; margin-top: 6px; }}
             table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
-            th {{ background: #1F4E79; color: white; padding: 8px; border: 1px solid #cbd5e1; text-align: left; }}
+            th {{ background: #7C3AED; color: white; padding: 8px; border: 1px solid #C4B5FD; text-align: left; }}
             td {{ padding: 7px; border: 1px solid #e5e7eb; vertical-align: top; }}
-            tr:nth-child(even) {{ background: #f8fafc; }}
+            tr:nth-child(even) {{ background: #FBFAFF; }}
             .badge {{ border-radius: 999px; padding: 4px 8px; font-weight: bold; display: inline-block; }}
         </style>
     </head>

@@ -702,13 +702,13 @@ def importar_cameras_origem_supabase(df_importacao):
     cursor.execute("""
         UPDATE tbl_auditoria AS a
         SET
-            id_whitelabel = COALESCE(NULLIF(c.id_whitelabel, ''), a.id_whitelabel),
-            franqueado = COALESCE(NULLIF(c.nome_empresa, ''), a.franqueado),
-            nome_da_camera = COALESCE(NULLIF(c.nome_da_camera, ''), a.nome_da_camera),
-            status_da_camera = COALESCE(NULLIF(c.status_da_camera, ''), a.status_da_camera),
-            plano_contratado = COALESCE(NULLIF(c.plano_contratado, ''), a.plano_contratado)
+            id_whitelabel = COALESCE(NULLIF(c.id_whitelabel::text, ''), a.id_whitelabel),
+            franqueado = COALESCE(NULLIF(c.nome_empresa::text, ''), a.franqueado),
+            nome_da_camera = COALESCE(NULLIF(c.nome_da_camera::text, ''), a.nome_da_camera),
+            status_da_camera = COALESCE(NULLIF(c.status_da_camera::text, ''), a.status_da_camera),
+            plano_contratado = COALESCE(NULLIF(c.plano_contratado::text, ''), a.plano_contratado)
         FROM cameras_origem AS c
-        WHERE a.id_da_camera = c.id_da_camera
+        WHERE a.id_da_camera = c.id_da_camera::text
     """)
     auditorias_sincronizadas = cursor.rowcount
 

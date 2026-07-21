@@ -1,0 +1,36 @@
+name: Manter app Streamlit acordado
+
+# Roda na nuvem do GitHub -- nao depende de nenhum computador ligado.
+on:
+  schedule:
+    # A cada 3 horas (UTC). Margem de sobra contra o sono por inatividade (~6h+).
+    - cron: "0 */3 * * *"
+  workflow_dispatch: {} # permite rodar manualmente pela aba Actions
+
+# Evita que duas execucoes rodem ao mesmo tempo.
+concurrency:
+  group: keep-awake
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar o repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar Playwright (Chromium)
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Acordar / manter o app acordado
+        env:
+          APP_URL: https://auditoria-camerite.streamlit.app/
+        run: python .github/scripts/keep_awake.py

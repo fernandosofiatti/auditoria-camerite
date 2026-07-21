@@ -7,6 +7,10 @@ on:
     - cron: "0 */3 * * *"
   workflow_dispatch: {} # permite rodar manualmente pela aba Actions
 
+# Necessario para o passo keepalive fazer commit vazio automatico.
+permissions:
+  contents: write
+
 # Evita que duas execucoes rodem ao mesmo tempo.
 concurrency:
   group: keep-awake
@@ -34,3 +38,11 @@ jobs:
         env:
           APP_URL: https://auditoria-camerite.streamlit.app/
         run: python .github/scripts/keep_awake.py
+
+      # Faz um commit vazio a cada ~45 dias para o GitHub nunca desativar
+      # o agendamento por falta de atividade no repositorio (limite de 60 dias).
+      - name: Keepalive (evita desativacao por inatividade)
+        uses: gautamkrishnar/keepalive-workflow@v1
+        with:
+          time_elapsed: "45"
+          commit_message: "chore: keepalive automatico (mantem o agendamento ativo)"
